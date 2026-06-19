@@ -4,7 +4,7 @@
 
 Its own series (own Day count, Day 1 → 50). One production-grade Spring Boot backend, growing one feature per day. Domain: e-commerce **order fulfillment** (Orders → Inventory → Payments → Shipping → Notifications). Starts a clean monolith, becomes event-driven microservices with full observability and a Kubernetes deploy.
 
-**Format:** each day = one feature, one step-by-step commit, one 3-tier learning page (👁 LOOK / 🧠 UNDERSTAND / 🔨 BUILD) + a dev.to article. **LinkedIn = weekly milestone**, not daily.
+**Full-stack:** Spring Boot **backend** + a modern **React UI** (React 19 + Vite + TypeScript + Tailwind v4, live on Vercel). **Each day ships BOTH** — the backend feature *and* its matching frontend — as one step-by-step commit, one 3-tier learning page (👁 LOOK / 🧠 UNDERSTAND / 🔨 BUILD), and a dev.to article. **LinkedIn = weekly milestone**, not daily.
 
 ---
 

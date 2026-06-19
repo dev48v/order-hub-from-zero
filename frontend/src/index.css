@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* Tailwind v4: theme tokens are declared in CSS, no tailwind.config.js needed.
+   Spring-green brand accent for OrderHub. */
+@theme {
+  --color-brand-50: #f0fdf4;
+  --color-brand-500: #22c55e;
+  --color-brand-600: #16a34a;
+  --color-brand-700: #15803d;
+}
+
+html { scroll-behavior: smooth; }
+body { background: #f8fafc; }
