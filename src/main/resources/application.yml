@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: order-hub
+
+server:
+  port: 8080
+
+# Day 1 keeps config tiny on purpose. Day 7 introduces profiles
+# (dev/prod) and type-safe @ConfigurationProperties.
