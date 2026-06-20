@@ -1,0 +1,10 @@
+# Render Blueprint — deploy the OrderHub API as a free Docker web service.
+# In the Render dashboard: New → Blueprint → connect this repo → it reads this file.
+services:
+  - type: web
+    name: order-hub-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/orders
+    autoDeploy: true
