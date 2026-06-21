@@ -2,8 +2,34 @@ spring:
   application:
     name: order-hub
 
+  # Day 2: persistence. Locally we default to H2, an in-memory SQL database that needs
+  # zero setup — the app boots with a real JPA/Hibernate stack and a working "orders" table.
+  #
+  # In production (Render) the SAME jar reads its connection from the environment:
+  #   SPRING_DATASOURCE_URL       e.g. jdbc:postgresql://<host>:5432/orderhub
+  #   SPRING_DATASOURCE_USERNAME
+  #   SPRING_DATASOURCE_PASSWORD
+  # Spring Boot relaxed-binds those env vars onto spring.datasource.* and OVERRIDES the H2
+  # defaults below automatically — so prod talks to PostgreSQL with no code or profile change.
+  datasource:
+    url: jdbc:h2:mem:orderhub;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      # Let Hibernate create/extend the schema from the entities. Fine for a learning
+      # project on both H2 and Postgres; a real app would switch to Flyway/Liquibase later.
+      ddl-auto: update
+    # Don't hold a DB session open for the whole web request — keep the persistence
+    # boundary inside the service layer.
+    open-in-view: false
+
+  # H2's web console stays OFF — we talk to the DB only through the app.
+  h2:
+    console:
+      enabled: false
+
 server:
   port: 8080
-
-# Day 1 keeps config tiny on purpose. Day 7 introduces profiles
-# (dev/prod) and type-safe @ConfigurationProperties.
