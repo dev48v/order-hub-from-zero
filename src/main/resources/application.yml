@@ -17,11 +17,21 @@ spring:
     username: sa
     password:
 
+  # Day 3: Flyway now owns the schema. On startup it scans the classpath under
+  # db/migration/, runs every V*.sql file in version order (V1, then V2, ...) that
+  # hasn't been applied yet, and records each one in a flyway_schema_history table so
+  # it never re-runs. This happens BEFORE Hibernate initialises, on BOTH H2 (local)
+  # and PostgreSQL (prod) — the same migrations, the same order, everywhere.
+  flyway:
+    # On by default whenever flyway-core is on the classpath; set explicitly for clarity.
+    enabled: true
+
   jpa:
     hibernate:
-      # Let Hibernate create/extend the schema from the entities. Fine for a learning
-      # project on both H2 and Postgres; a real app would switch to Flyway/Liquibase later.
-      ddl-auto: update
+      # Flyway creates the tables now, so Hibernate must NOT touch the schema. "validate"
+      # makes Hibernate only check that each entity maps onto the migrated tables/columns
+      # and fail fast on any mismatch — it never creates or alters anything.
+      ddl-auto: validate
     # Don't hold a DB session open for the whole web request — keep the persistence
     # boundary inside the service layer.
     open-in-view: false
