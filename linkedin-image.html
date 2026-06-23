@@ -6,41 +6,41 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100vw; height: 100vh; }
-  body { background: linear-gradient(135deg, #0f172a 0%, #111f3a 55%, #0f172a 100%);
+  body { background: linear-gradient(135deg, #0f172a 0%, #2a1a0c 55%, #0f172a 100%);
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #f1f5f9; overflow: hidden; position: relative;
     padding: 2.8vh 3.6vw 3.4vh; display: flex; flex-direction: column; }
 
   /* header */
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
-  .series-badge { display: inline-block; background: linear-gradient(90deg, #2563eb, #3b82f6); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
-  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #93c5fd, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
+  .series-badge { display: inline-block; background: linear-gradient(90deg, #ea580c, #f97316); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
+  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #fdba74, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
   .sub { font-size: 17px; font-weight: 700; color: #f8fafc; margin-top: 6px; }
   .tagline { font-size: 13.5px; color: #94a3b8; margin-top: 3px; }
   .tag-col { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; padding-top: 4px; }
-  .tag { background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); color: #93c5fd; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 8px; }
+  .tag { background: rgba(249, 115, 22, 0.12); border: 1px solid rgba(249, 115, 22, 0.35); color: #fdba74; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 8px; }
 
   /* calendar */
-  .cal-title { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #93c5fd; margin: 13px 0 9px; }
+  .cal-title { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #fdba74; margin: 13px 0 9px; }
   .cal { flex: 1; display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(5, 1fr); gap: 8px; }
   .day { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148,163,184,0.12); border-radius: 10px; padding: 10px 13px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
   .day .d { font-size: 11.5px; font-weight: 800; color: #64748b; letter-spacing: 0.4px; }
   .day .t { font-size: 15px; font-weight: 700; color: #dbe4ee; line-height: 1.1; }
-  .day.live { background: linear-gradient(135deg, #2563eb, #3b82f6); border-color: #3b82f6; }
+  .day.live { background: linear-gradient(135deg, #ea580c, #f97316); border-color: #f97316; }
   .day.live .d { color: rgba(255,255,255,0.85); }
   .day.live .t { color: #fff; }
-  .day.phase { border-left: 3px solid #3b82f6; background: rgba(59, 130, 246, 0.1); }
-  .day.phase .d { color: #93c5fd; }
+  .day.phase { border-left: 3px solid #f97316; background: rgba(249, 115, 22, 0.1); }
+  .day.phase .d { color: #fdba74; }
 
   /* legend + footer (in normal flow, above the bar) */
   .foot { margin-top: 13px; display: flex; justify-content: space-between; align-items: center; }
   .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: #94a3b8; font-weight: 600; }
   .legend .sw { display: inline-block; width: 13px; height: 13px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
-  .sw.l { background: linear-gradient(135deg, #2563eb, #3b82f6); }
-  .sw.p { background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; }
+  .sw.l { background: linear-gradient(135deg, #ea580c, #f97316); }
+  .sw.p { background: rgba(249, 115, 22, 0.1); border-left: 3px solid #f97316; }
   .url { font-size: 14px; color: #64748b; font-weight: 600; }
-  .next { margin-top: 7px; font-size: 12.5px; color: #60a5fa; font-weight: 600; }
+  .next { margin-top: 7px; font-size: 12.5px; color: #fb923c; font-weight: 600; }
 
-  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #2563eb, #3b82f6, #2563eb); }
+  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #ea580c, #f97316, #ea580c); }
 </style>
 </head>
 <body>
@@ -62,8 +62,8 @@
   <div class="cal">
     <div class="day"><div class="d">DAY 1 ✓</div><div class="t">REST API + React UI</div></div>
     <div class="day"><div class="d">DAY 2 ✓</div><div class="t">JPA + Postgres</div></div>
-    <div class="day live"><div class="d">DAY 3 ✓</div><div class="t">Flyway migrations</div></div>
-    <div class="day"><div class="d">DAY 4</div><div class="t">DTOs + validation</div></div>
+    <div class="day"><div class="d">DAY 3 ✓</div><div class="t">Flyway migrations</div></div>
+    <div class="day live"><div class="d">DAY 4 ✓</div><div class="t">DTOs + validation</div></div>
     <div class="day"><div class="d">DAY 5</div><div class="t">Exception handling</div></div>
     <div class="day"><div class="d">DAY 6</div><div class="t">Pagination + filter</div></div>
 
