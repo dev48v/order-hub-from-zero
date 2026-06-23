@@ -1,5 +1,6 @@
 package dev.dev48v.orderhub.web.dto;
 
+import dev.dev48v.orderhub.web.validation.CleanText;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -18,10 +19,12 @@ import jakarta.validation.constraints.Size;
 public record CreateOrderRequest(
         @NotBlank(message = "customer is required")
         @Size(max = 120, message = "customer must be at most 120 characters")
+        @CleanText(message = "customer must be clean, non-blank text")
         String customer,
 
         @NotBlank(message = "item is required")
         @Size(max = 200, message = "item must be at most 200 characters")
+        @CleanText(message = "item must be clean, non-blank text")
         String item,
 
         @Min(value = 1, message = "quantity must be at least 1")
