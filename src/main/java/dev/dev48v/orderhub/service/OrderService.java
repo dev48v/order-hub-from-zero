@@ -3,8 +3,6 @@ package dev.dev48v.orderhub.service;
 import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.repository.OrderRepository;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.util.List;
 import java.util.UUID;
@@ -28,9 +26,10 @@ public class OrderService {
     }
 
     public Order getOrder(String id) {
-        // Day 5 replaces this with a proper domain exception + @ControllerAdvice.
+        // Throw a domain exception, not an HTTP one. The service stays free of web
+        // concerns; the @RestControllerAdvice turns this into a 404 ProblemDetail.
         return repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Order not found: " + id));
+                .orElseThrow(() -> new OrderNotFoundException(id));
     }
 
     public List<Order> listOrders() {
