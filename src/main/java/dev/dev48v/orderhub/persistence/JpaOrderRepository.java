@@ -1,8 +1,11 @@
 package dev.dev48v.orderhub.persistence;
 
 import dev.dev48v.orderhub.domain.Order;
+import dev.dev48v.orderhub.domain.OrderStatus;
 import dev.dev48v.orderhub.repository.OrderRepository;
 import org.springframework.context.annotation.Profile;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -41,5 +44,18 @@ public class JpaOrderRepository implements OrderRepository {
         return jpa.findAll().stream()
                 .map(OrderEntity::toDomain)
                 .toList();
+    }
+
+    // Day 6 — paged/filtered search delegated to Spring Data, then mapped back to the domain.
+    // WHY: a null status means "no filter", so we fall back to the inherited findAll(Pageable);
+    // otherwise the derived findByStatus query does the WHERE for us. Either way we get a
+    // Page<OrderEntity> and .map(OrderEntity::toDomain) converts it to a Page<Order> while
+    // preserving the page metadata — the entity never escapes the persistence layer.
+    @Override
+    public Page<Order> search(OrderStatus statusOrNull, Pageable pageable) {
+        Page<OrderEntity> page = (statusOrNull == null)
+                ? jpa.findAll(pageable)
+                : jpa.findByStatus(statusOrNull, pageable);
+        return page.map(OrderEntity::toDomain);
     }
 }
