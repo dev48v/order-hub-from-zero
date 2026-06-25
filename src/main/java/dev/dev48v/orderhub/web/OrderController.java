@@ -4,13 +4,16 @@ import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.service.OrderService;
 import dev.dev48v.orderhub.web.dto.CreateOrderRequest;
 import dev.dev48v.orderhub.web.dto.OrderResponse;
+import dev.dev48v.orderhub.web.dto.PagedResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
-import java.util.List;
 
 // STEP 8 — The controller: the thin HTTP layer.
 // WHY: it only translates between HTTP and the service. @Valid triggers the DTO's
@@ -39,9 +42,18 @@ public class OrderController {
         return OrderResponse.from(service.getOrder(id));
     }
 
+    // Day 6 — list orders with pagination, sorting and an optional status filter.
+    // WHY: ?status= is parsed in the service; Spring resolves ?page=&size=&sort= into the
+    // Pageable automatically (e.g. ?page=1&size=10&sort=createdAt,desc). @PageableDefault
+    // gives sane defaults when the client sends nothing. We map the Page<Order> to a
+    // Page<OrderResponse> so the entity never leaks, then wrap it in our own PagedResponse
+    // envelope (content + page metadata) for a stable API contract.
     @GetMapping
-    public List<OrderResponse> list() {
-        return service.listOrders().stream().map(OrderResponse::from).toList();
+    public PagedResponse<OrderResponse> list(
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
+        Page<OrderResponse> page = service.list(status, pageable).map(OrderResponse::from);
+        return PagedResponse.from(page);
     }
 
     @PostMapping("/{id}/confirm")

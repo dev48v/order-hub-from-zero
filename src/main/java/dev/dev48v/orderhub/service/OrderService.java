@@ -1,7 +1,10 @@
 package dev.dev48v.orderhub.service;
 
 import dev.dev48v.orderhub.domain.Order;
+import dev.dev48v.orderhub.domain.OrderStatus;
 import dev.dev48v.orderhub.repository.OrderRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -34,6 +37,34 @@ public class OrderService {
 
     public List<Order> listOrders() {
         return repository.findAll();
+    }
+
+    // Day 6 — a paged, sorted and optionally status-filtered listing.
+    // WHY: the controller hands us the raw ?status= string and a Spring-resolved Pageable
+    // (page/size/sort). Parsing the status here keeps the controller thin and the rule in one
+    // place: blank/missing means "no filter"; an unrecognised value isn't an error — it simply
+    // matches nothing, so we return an empty page rather than a 500. Then we delegate to the
+    // repository port, which is identical across the JPA and in-memory backends.
+    public Page<Order> list(String statusParam, Pageable pageable) {
+        OrderStatus status = parseStatus(statusParam);
+        if (statusParam != null && !statusParam.isBlank() && status == null) {
+            // A value was supplied but didn't match any status → nothing matches.
+            return Page.empty(pageable);
+        }
+        return repository.search(status, pageable);
+    }
+
+    // Lenient parse: null/blank → no filter (null); a valid name (case-insensitive) → that
+    // status; anything else → null, which list() treats as "matches nothing".
+    private OrderStatus parseStatus(String statusParam) {
+        if (statusParam == null || statusParam.isBlank()) {
+            return null;
+        }
+        try {
+            return OrderStatus.valueOf(statusParam.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
     }
 
     public Order confirmOrder(String id) {
