@@ -50,6 +50,17 @@ public class ApiExceptionHandler {
         return stamped(problem);
     }
 
+    // 400 — a service-layer guard rejected the input (e.g. quantity above the configured
+    // app.orders.max-quantity limit). It's still bad input, so it gets the same 400 shape as
+    // a failed @Valid — just surfaced from a business rule rather than a field annotation.
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ProblemDetail handleIllegalArgument(IllegalArgumentException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Invalid request");
+        return stamped(problem);
+    }
+
     // 409 — a business-rule violation from the domain (e.g. confirming an order that
     // isn't PLACED). 409 Conflict is the right semantic: the request clashes with the
     // current state of the resource.

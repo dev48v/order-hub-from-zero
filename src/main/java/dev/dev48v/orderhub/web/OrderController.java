@@ -44,15 +44,20 @@ public class OrderController {
 
     // Day 6 — list orders with pagination, sorting and an optional status filter.
     // WHY: ?status= is parsed in the service; Spring resolves ?page=&size=&sort= into the
-    // Pageable automatically (e.g. ?page=1&size=10&sort=createdAt,desc). @PageableDefault
-    // gives sane defaults when the client sends nothing. We map the Page<Order> to a
-    // Page<OrderResponse> so the entity never leaks, then wrap it in our own PagedResponse
-    // envelope (content + page metadata) for a stable API contract.
+    // Pageable automatically (e.g. ?page=1&size=10&sort=createdAt,desc). We map the
+    // Page<Order> to a Page<OrderResponse> so the entity never leaks, then wrap it in our
+    // own PagedResponse envelope (content + page metadata) for a stable API contract.
+    //
+    // Day 7 — only the default SORT lives here now. The default and maximum page SIZE are no
+    // longer hard-coded: we hand the service the client's raw ?size= (null when omitted) and
+    // it applies app.orders.default-page-size / max-page-size from OrderProperties. @PageableDefault
+    // still resolves the page index and sort; its size is ignored because the service overrides it.
     @GetMapping
     public PagedResponse<OrderResponse> list(
             @RequestParam(required = false) String status,
-            @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        Page<OrderResponse> page = service.list(status, pageable).map(OrderResponse::from);
+            @RequestParam(name = "size", required = false) Integer size,
+            @PageableDefault(sort = "createdAt") Pageable pageable) {
+        Page<OrderResponse> page = service.list(status, size, pageable).map(OrderResponse::from);
         return PagedResponse.from(page);
     }
 
