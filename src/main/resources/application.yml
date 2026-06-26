@@ -2,6 +2,13 @@ spring:
   application:
     name: order-hub
 
+  # Day 7: profiles. This base file holds the settings shared by every environment; the
+  # environment-specific overrides live in application-dev.yml and application-prod.yml.
+  # We deliberately do NOT hardcode an active profile here — pick one at runtime via the
+  # SPRING_PROFILES_ACTIVE environment variable (e.g. Render sets SPRING_PROFILES_ACTIVE=prod;
+  # locally run with -Dspring.profiles.active=dev). With no profile set, only this base file
+  # applies, which keeps the zero-config H2 boot working out of the box.
+
   # Day 2: persistence. Locally we default to H2, an in-memory SQL database that needs
   # zero setup — the app boots with a real JPA/Hibernate stack and a working "orders" table.
   #

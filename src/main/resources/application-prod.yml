@@ -1,0 +1,35 @@
+# Day 7 — PROD profile.
+# Activated with SPRING_PROFILES_ACTIVE=prod (Render sets this on the deployed service). Merged
+# ON TOP of application.yml, so it only states what differs in production.
+# WHY a prod profile: in production we want quiet, lean logging (no SQL spam, no stack-trace
+# leakage) and headroom on the limits — but the SAME jar and code path. Crucially, there are NO
+# secrets here: the database URL/credentials still come from the environment (see below), so
+# this file is safe to commit.
+spring:
+  jpa:
+    # Never echo SQL in production — it's noise and a minor information leak.
+    show-sql: false
+  # No H2 console in production (and prod runs on PostgreSQL anyway).
+  h2:
+    console:
+      enabled: false
+
+  # The datasource is intentionally NOT set here. Production reads it from the environment,
+  # exactly as wired in application.yml's comments:
+  #   SPRING_DATASOURCE_URL / SPRING_DATASOURCE_USERNAME / SPRING_DATASOURCE_PASSWORD
+  # Spring relaxed-binds those env vars onto spring.datasource.*, so no credentials live in
+  # source control.
+
+# Minimal logging: warnings and above for the framework, INFO for our own code. Keeps prod
+# logs lean and avoids leaking query/parameter detail.
+logging:
+  level:
+    root: WARN
+    dev.dev48v.orderhub: INFO
+
+# Larger limits in production — real traffic can request bigger pages and quantities.
+app:
+  orders:
+    max-quantity: 5000
+    default-page-size: 20
+    max-page-size: 200

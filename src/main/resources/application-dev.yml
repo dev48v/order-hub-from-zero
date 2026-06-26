@@ -1,0 +1,31 @@
+# Day 7 — DEV profile.
+# Activated with SPRING_PROFILES_ACTIVE=dev (or -Dspring.profiles.active=dev). These keys are
+# merged ON TOP of application.yml, so only the differences for local development live here.
+# WHY a dev profile: while building, you want to SEE what the app is doing — the SQL it runs,
+# the values it binds — and small page sizes make paging easy to eyeball. None of this noise
+# (or its overhead) belongs in production.
+spring:
+  jpa:
+    # Log the SQL Hibernate executes, and format it so it's readable in the console.
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  # The H2 web console is handy locally to poke at the in-memory database directly.
+  h2:
+    console:
+      enabled: true
+
+# Verbose logging while developing: see our own app's DEBUG lines and the actual SQL + bound
+# parameters Hibernate sends to the database.
+logging:
+  level:
+    dev.dev48v.orderhub: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.orm.jdbc.bind: TRACE
+
+# Smaller paging defaults in dev so a single page is easy to read while testing.
+app:
+  orders:
+    default-page-size: 5
+    max-page-size: 20
