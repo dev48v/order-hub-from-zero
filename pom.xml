@@ -20,7 +20,26 @@
 
   <properties>
     <java.version>21</java.version>
+    <!-- Day 9: pull Testcontainers forward of the version the Spring Boot parent pins (1.19.8).
+         The bundled docker-java in 1.19.8 can't complete the /info handshake against very recent
+         Docker engines; this aligns every Testcontainers module on a build that can. -->
+    <testcontainers.version>1.21.4</testcontainers.version>
   </properties>
+
+  <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
+       Declared here (ahead of the Spring Boot parent's dependency management) so testcontainers.version
+       above wins. -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <!-- Day 51: REST endpoints (Tomcat + Spring MVC + Jackson, all in one starter). -->
