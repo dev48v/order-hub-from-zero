@@ -75,6 +75,24 @@
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
     </dependency>
+
+    <!-- Day 9: Testcontainers — spin up a REAL PostgreSQL in a throwaway Docker container
+         for the integration tests, so Flyway + JPA run against the same engine as prod
+         instead of H2. The Spring Boot parent already pins testcontainers.version (1.19.8),
+         so these modules inherit that version — no explicit <version> or BOM needed here. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 9: the PostgreSQL module gives us PostgreSQLContainer with the right driver
+         and JDBC-URL wiring out of the box. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
   </dependencies>
 
   <build>
