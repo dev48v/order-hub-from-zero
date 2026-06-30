@@ -51,6 +51,24 @@ spring:
 server:
   port: 8080
 
+# Day 10: springdoc-openapi / Swagger UI.
+# WHY here in the base file: the paths are part of the API contract and stay the same
+# everywhere. The generated spec is served at /v3/api-docs and the interactive UI at
+# /swagger-ui.html. We DISABLE both by default and only turn them back on in the dev
+# profile (application-dev.yml). Rationale: prod (application-prod.yml) leaves these
+# defaults untouched, so the docs are NOT exposed publicly on the deployed service —
+# the spec describes the whole surface area and is more useful kept internal. Flip
+# springdoc.api-docs.enabled / swagger-ui.enabled to true (or run with the dev profile)
+# to browse it locally.
+springdoc:
+  api-docs:
+    enabled: false
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: false
+    path: /swagger-ui.html
+    operations-sorter: method
+
 # Day 7: application-specific limits, bound type-safely onto OrderProperties
 # (@ConfigurationProperties prefix = "app.orders"). These are the defaults; a profile
 # file (application-dev.yml / application-prod.yml) or an environment variable

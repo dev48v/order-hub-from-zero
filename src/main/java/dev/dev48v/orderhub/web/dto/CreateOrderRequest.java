@@ -1,6 +1,7 @@
 package dev.dev48v.orderhub.web.dto;
 
 import dev.dev48v.orderhub.web.validation.CleanText;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -16,17 +17,21 @@ import jakarta.validation.constraints.Size;
 // check and a bound, each with a clear message, so a bad request comes back as a
 // precise 400 instead of blowing up deeper in the stack (or silently persisting junk).
 // quantity is a primitive int, so it can never be null — @Min/@Max are enough.
+@Schema(description = "Payload for placing a new order.")
 public record CreateOrderRequest(
+        @Schema(description = "Name of the customer placing the order.", example = "Ada Lovelace")
         @NotBlank(message = "customer is required")
         @Size(max = 120, message = "customer must be at most 120 characters")
         @CleanText(message = "customer must be clean, non-blank text")
         String customer,
 
+        @Schema(description = "The item being ordered.", example = "Mechanical keyboard")
         @NotBlank(message = "item is required")
         @Size(max = 200, message = "item must be at most 200 characters")
         @CleanText(message = "item must be clean, non-blank text")
         String item,
 
+        @Schema(description = "How many units to order (1-1000).", example = "2", minimum = "1", maximum = "1000")
         @Min(value = 1, message = "quantity must be at least 1")
         @Max(value = 1000, message = "quantity must be at most 1000")
         int quantity
