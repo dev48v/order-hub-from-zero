@@ -24,6 +24,9 @@
          The bundled docker-java in 1.19.8 can't complete the /info handshake against very recent
          Docker engines; this aligns every Testcontainers module on a build that can. -->
     <testcontainers.version>1.21.4</testcontainers.version>
+    <!-- Day 10: springdoc-openapi version. 2.6.x is the line built for Spring Boot 3.3
+         (Spring MVC 6.1 / Jakarta) — the older 1.x line targets Spring Boot 2 and won't work. -->
+    <springdoc.version>2.6.0</springdoc.version>
   </properties>
 
   <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
@@ -58,6 +61,17 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+
+    <!-- Day 10: springdoc-openapi — generates an OpenAPI 3 spec from the controllers/DTOs
+         at runtime (served at /v3/api-docs) and bundles Swagger UI (/swagger-ui.html) to
+         browse and try the API. The "-starter-webmvc-ui" artifact is the right one for a
+         Spring MVC (Tomcat) app; it pulls in swagger-ui transitively. Version is pinned via
+         the springdoc.version property so it stays aligned with Spring Boot 3.3. -->
+    <dependency>
+      <groupId>org.springdoc</groupId>
+      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+      <version>${springdoc.version}</version>
     </dependency>
 
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
