@@ -1,0 +1,29 @@
+# Day 10 — keep the Docker build context small and clean.
+# WHY: everything here would otherwise be shipped to the daemon as build context, slowing the
+# build and risking stale artifacts leaking into the image. The Dockerfile builds the jar from
+# source inside the build stage, so none of this is needed.
+
+# Maven build output — rebuilt fresh inside the build stage.
+target/
+
+# The frontend is deployed separately (Vercel); it has no place in the API image.
+frontend/
+**/node_modules/
+
+# Version control + local IDE/OS noise.
+.git/
+.gitignore
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Docs and local-only files — not needed at runtime.
+*.md
+*.log
+*.png
+palettes.html
+
+# Don't recurse the Dockerfile/ignore back into the context.
+Dockerfile
+.dockerignore
