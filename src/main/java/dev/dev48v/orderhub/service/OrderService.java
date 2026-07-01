@@ -1,9 +1,13 @@
 package dev.dev48v.orderhub.service;
 
+import dev.dev48v.orderhub.config.CacheConfig;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.domain.OrderStatus;
 import dev.dev48v.orderhub.repository.OrderRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -20,6 +24,23 @@ import java.util.UUID;
 // Day 7: the tunable limits (max quantity, page sizes) no longer live as magic numbers
 // here — they come from the injected OrderProperties, so they can be changed per
 // environment via config or env vars without recompiling.
+//
+// Day 11 — CACHING KEY STRATEGY (all wiring is in CacheConfig):
+//   • cache "order"  — one entry PER ORDER, keyed by the order id (key = "#id"). getOrder(id)
+//                      populates it (@Cacheable); confirmOrder(id) removes that one id
+//                      (@CacheEvict key="#id"); placeOrder can't affect an existing id so it
+//                      touches only the list cache.
+//   • cache "orders" — the WHOLE list under one fixed key ("'all'"). listOrders() populates it;
+//                      ANY write (place/confirm) evicts the entire "orders" cache so the next
+//                      list read is rebuilt from the database. We use allEntries=true rather than
+//                      a key because there is exactly one list snapshot and it's cheap to drop.
+// Why evict rather than update: a stale read that lingers is far worse than an extra DB round-trip
+// right after a write. Evicting is simple and always correct; the next reader repopulates the cache.
+//
+// Note: the PAGED list() below is intentionally NOT cached. Its result is a Spring Data Page whose
+// concrete type doesn't round-trip cleanly through a JSON cache, and the cache key would have to
+// fold in page/size/sort/status — a low-hit, high-churn combination. Caching the single-order read
+// (the real hotspot) and the simple full-list read gives the win without that complexity.
 @Service
 public class OrderService {
 
@@ -31,6 +52,10 @@ public class OrderService {
         this.properties = properties;
     }
 
+    // A brand-new order can't already be in the "order" cache (its id was just minted), so there's
+    // nothing per-id to evict here. But it DOES change the full list, so we drop the "orders" cache
+    // so the next listOrders() rebuilds from the database and includes this new row.
+    @CacheEvict(cacheNames = CacheConfig.ORDERS_CACHE, allEntries = true)
     public Order placeOrder(String customer, String item, int quantity) {
         // The DTO's @Max is a static fast-fail at the HTTP edge; this is the authoritative,
         // configurable business limit (app.orders.max-quantity). Keeping it here means the
@@ -43,6 +68,11 @@ public class OrderService {
         return repository.save(order);
     }
 
+    // @Cacheable = cache-aside for a single order: check Redis under key "order::<id>" first; on a
+    // HIT return the cached JSON without touching the database; on a MISS run the body and store the
+    // returned Order before handing it back. unless="#result == null" is belt-and-braces — the
+    // method throws on a miss rather than returning null, and the cache also refuses null values.
+    @Cacheable(cacheNames = CacheConfig.ORDER_CACHE, key = "#id", unless = "#result == null")
     public Order getOrder(String id) {
         // Throw a domain exception, not an HTTP one. The service stays free of web
         // concerns; the @RestControllerAdvice turns this into a 404 ProblemDetail.
@@ -50,6 +80,10 @@ public class OrderService {
                 .orElseThrow(() -> new OrderNotFoundException(id));
     }
 
+    // Cache the full list under a single fixed key ("orders::all"). Any create/confirm evicts this
+    // whole cache (see placeOrder/confirmOrder), so it can never serve a list that's missing a new
+    // or newly-confirmed order.
+    @Cacheable(cacheNames = CacheConfig.ORDERS_CACHE, key = "'all'")
     public List<Order> listOrders() {
         return repository.findAll();
     }
@@ -99,6 +133,16 @@ public class OrderService {
         }
     }
 
+    // A confirm mutates an existing order, so BOTH cache regions can now hold stale data:
+    //   • the "order::<id>" entry still shows the old PLACED status → evict that exact key.
+    //   • the "orders::all" list snapshot still shows the old status too → evict the whole list.
+    // @Caching lets us stack the two @CacheEvicts. Note this method calls getOrder(id), but that
+    // internal (self-)call bypasses the proxy, so it will NOT read from or write to the cache here —
+    // it hits the repository directly, which is what we want on a write path.
+    @Caching(evict = {
+            @CacheEvict(cacheNames = CacheConfig.ORDER_CACHE, key = "#id"),
+            @CacheEvict(cacheNames = CacheConfig.ORDERS_CACHE, allEntries = true)
+    })
     public Order confirmOrder(String id) {
         Order order = getOrder(id);
         order.confirm();              // the rule lives on the domain object
