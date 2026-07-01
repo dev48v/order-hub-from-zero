@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OrderHub — 10 Palettes</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:100vw; height:100vh; }
+  body { background:#0a0f1a; font-family:'Segoe UI',system-ui,sans-serif; color:#e2e8f0;
+    padding:2.4vh 2.4vw; display:flex; flex-direction:column; overflow:hidden; }
+  h1 { font-size:26px; font-weight:900; }
+  h1 span { color:#22c55e; }
+  .note { font-size:13.5px; color:#94a3b8; margin:5px 0 16px; }
+  .grid { flex:1; display:grid; grid-template-columns:repeat(5,1fr); grid-template-rows:repeat(2,1fr); gap:14px; }
+  .card { border-radius:14px; overflow:hidden; display:flex; flex-direction:column; border:1px solid rgba(255,255,255,0.08); }
+  .prev { flex:1; padding:11px 13px; display:flex; flex-direction:column; gap:7px; }
+  .pt { font-size:13px; font-weight:800; }
+  .row { display:flex; gap:6px; }
+  .cell { flex:1; border-radius:7px; padding:6px 7px; font-size:9.5px; font-weight:700; }
+  .pill { align-self:flex-start; font-size:9.5px; font-weight:800; letter-spacing:1px; padding:4px 9px; border-radius:20px; color:#fff; }
+  .meta { background:#0e1422; padding:9px 12px; }
+  .pname { font-size:14px; font-weight:800; display:flex; align-items:center; gap:8px; }
+  .dot { width:11px; height:11px; border-radius:50%; }
+  .hex { font-size:11px; color:#64748b; font-weight:600; margin-top:3px; letter-spacing:0.3px; }
+  .avoid { font-size:10.5px; color:#f87171; margin-top:2px; font-weight:600; }
+</style>
+</head>
+<body>
+<h1>OrderHub — 10 color palettes <span>(design locked · palette rotates)</span></h1>
+<div class="note">Same calendar layout every day. Pick a different palette each day · none duplicate · all distinct from the TechFromZero series colors. #1 Spring Green = the OrderHub signature anchor.</div>
+<div class="grid" id="g"></div>
+<script>
+  const P = [
+    { n:"1 · Spring Green", a:"#22c55e", a2:"#16a34a", al:"#86efac", bg:"linear-gradient(135deg,#0f172a,#14302a 55%,#0f172a)", note:"signature anchor" },
+    { n:"2 · Ocean Teal",   a:"#14b8a6", a2:"#0d9488", al:"#5eead4", bg:"linear-gradient(135deg,#0b1f24,#0f2e33 55%,#0b1f24)", note:"" },
+    { n:"3 · Royal Blue",   a:"#3b82f6", a2:"#2563eb", al:"#93c5fd", bg:"linear-gradient(135deg,#0b1226,#111f3a 55%,#0b1226)", note:"" },
+    { n:"4 · Sunset Orange",a:"#f97316", a2:"#ea580c", al:"#fdba74", bg:"linear-gradient(135deg,#1f1208,#2a1a0c 55%,#1f1208)", note:"" },
+    { n:"5 · Crimson",      a:"#ef4444", a2:"#dc2626", al:"#fca5a5", bg:"linear-gradient(135deg,#1f0b0f,#2a0f16 55%,#1f0b0f)", note:"" },
+    { n:"6 · Fuchsia",      a:"#d946ef", a2:"#c026d3", al:"#f0abfc", bg:"linear-gradient(135deg,#1a0b1f,#260f2e 55%,#1a0b1f)", note:"" },
+    { n:"7 · Gold",         a:"#eab308", a2:"#ca8a04", al:"#fde047", bg:"linear-gradient(135deg,#1f1a08,#2a240c 55%,#1f1a08)", note:"" },
+    { n:"8 · Cyber Lime",   a:"#84cc16", a2:"#65a30d", al:"#bef264", bg:"linear-gradient(135deg,#131f08,#1c2a0c 55%,#131f08)", note:"" },
+    { n:"9 · Deep Purple",  a:"#a855f7", a2:"#9333ea", al:"#d8b4fe", bg:"linear-gradient(135deg,#140b26,#1d113a 55%,#140b26)", note:"" },
+    { n:"10 · Steel Mono",  a:"#94a3b8", a2:"#64748b", al:"#cbd5e1", bg:"linear-gradient(135deg,#0f172a,#1e293b 55%,#0f172a)", note:"" },
+  ];
+  const TFZ = "Avoid (TechFromZero): emerald · indigo · violet · amber · sky · rose";
+  document.getElementById('g').innerHTML = P.map(p => `
+    <div class="card">
+      <div class="prev" style="background:${p.bg}">
+        <div class="pill" style="background:linear-gradient(90deg,${p.a2},${p.a})">🌱 NEW SERIES</div>
+        <div class="pt" style="color:${p.al}">OrderHub</div>
+        <div class="row">
+          <div class="cell" style="background:linear-gradient(135deg,${p.a2},${p.a});color:#fff">DAY 1 ✓</div>
+          <div class="cell" style="background:rgba(148,163,184,.14);color:#cbd5e1">DAY 2</div>
+          <div class="cell" style="background:rgba(148,163,184,.14);color:#cbd5e1">DAY 3</div>
+        </div>
+        <div class="row">
+          <div class="cell" style="background:${hexA(p.a,0.13)};border-left:3px solid ${p.a};color:${p.al}">PHASE ▸</div>
+          <div class="cell" style="background:rgba(148,163,184,.14);color:#cbd5e1">DAY 5</div>
+          <div class="cell" style="background:rgba(148,163,184,.14);color:#cbd5e1">DAY 6</div>
+        </div>
+      </div>
+      <div class="meta">
+        <div class="pname"><span class="dot" style="background:${p.a}"></span>${p.n}${p.note?` · <span style="color:#86efac;font-size:11px">${p.note}</span>`:""}</div>
+        <div class="hex">${p.a} · ${p.a2} · ${p.al}</div>
+      </div>
+    </div>`).join('');
+  function hexA(h,a){const n=parseInt(h.slice(1),16);return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;}
+</script>
+</body>
+</html>
