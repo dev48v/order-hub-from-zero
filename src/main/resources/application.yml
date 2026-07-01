@@ -48,6 +48,19 @@ spring:
     console:
       enabled: false
 
+  # Day 11: Redis — the cache backend behind @Cacheable/@CacheEvict. Spring Boot auto-configures a
+  # Lettuce-based connection factory from these keys, and CacheConfig turns it into a RedisCacheManager.
+  # These base defaults assume a Redis on localhost:6379 (a `docker run -p 6379:6379 redis:7` away).
+  # The dev profile keeps localhost; the prod profile overrides host/port from the environment
+  # (${REDIS_HOST} / ${REDIS_PORT}) so no infrastructure address is baked into the jar.
+  # Note: Lettuce connects lazily, so the app still BOOTS with no Redis running — it only errors when
+  # a cache read/write actually happens, which keeps the H2 dev boot friction-free until you cache.
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2s
+
 server:
   port: 8080
 

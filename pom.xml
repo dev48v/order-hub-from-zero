@@ -63,6 +63,31 @@
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
 
+    <!-- Day 11: Spring Data Redis — the cache backend. This starter pulls in Spring Data Redis
+         and the Lettuce client (a modern, Netty-based, thread-safe connection pool), so a single
+         RedisConnectionFactory can back Spring's caching abstraction. We drive it purely through
+         the @Cacheable / @CacheEvict annotations — no hand-written RedisTemplate calls. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!-- Day 11: the parameter-names Jackson module. Our cached values (the immutable Order domain
+         object) are reconstructed by Jackson from JSON; this module lets Jackson bind JSON fields
+         to constructor PARAMETERS by name (matching the @JsonCreator on Order) instead of needing a
+         no-arg constructor + setters. Spring Boot's Jackson auto-config registers it automatically. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.module</groupId>
+      <artifactId>jackson-module-parameter-names</artifactId>
+    </dependency>
+
+    <!-- Day 11: JSR-310 (java.time) Jackson module so Instant serializes as an ISO-8601 string
+         in the cache instead of failing. Version is managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
+    </dependency>
+
     <!-- Day 10: springdoc-openapi — generates an OpenAPI 3 spec from the controllers/DTOs
          at runtime (served at /v3/api-docs) and bundles Swagger UI (/swagger-ui.html) to
          browse and try the API. The "-starter-webmvc-ui" artifact is the right one for a
@@ -124,6 +149,16 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 11: Testcontainers core gives us GenericContainer, used to spin up a throwaway
+         Redis for the full-stack integration test so @Cacheable/@CacheEvict run against a REAL
+         Redis (same as prod) instead of failing on a missing connection. Redis has no dedicated
+         Testcontainers module we need, so a GenericContainer on the standard image is enough. -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

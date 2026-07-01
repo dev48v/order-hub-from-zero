@@ -14,6 +14,15 @@ spring:
     console:
       enabled: false
 
+  # Day 11: Redis in production comes entirely from the environment — no host/port is baked into
+  # the jar. ${REDIS_HOST}/${REDIS_PORT} are supplied by the deploy platform (e.g. a managed Redis
+  # add-on); the ":localhost"/":6379" defaults only apply if a var is missing, so a mis-provisioned
+  # environment fails loudly against localhost rather than silently pointing somewhere wrong.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
   # The datasource is intentionally NOT set here. Production reads it from the environment,
   # exactly as wired in application.yml's comments:
   #   SPRING_DATASOURCE_URL / SPRING_DATASOURCE_USERNAME / SPRING_DATASOURCE_PASSWORD

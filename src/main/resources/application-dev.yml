@@ -16,6 +16,13 @@ spring:
     console:
       enabled: true
 
+  # Day 11: dev talks to a local Redis (matches the base file's localhost:6379 default, restated
+  # here for clarity). Start one with:  docker run --rm -p 6379:6379 redis:7-alpine
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
 # Verbose logging while developing: see our own app's DEBUG lines and the actual SQL + bound
 # parameters Hibernate sends to the database.
 logging:
