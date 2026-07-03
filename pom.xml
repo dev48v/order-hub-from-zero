@@ -27,6 +27,10 @@
     <!-- Day 10: springdoc-openapi version. 2.6.x is the line built for Spring Boot 3.3
          (Spring MVC 6.1 / Jakarta) — the older 1.x line targets Spring Boot 2 and won't work. -->
     <springdoc.version>2.6.0</springdoc.version>
+    <!-- Day 13: Bucket4j version. The 8.14.x line ships the "_jdk17" artifacts compiled for
+         Java 17+ — the right ones for this Java 21 project — and the Lettuce-backed distributed
+         proxy manager we use to share token buckets across nodes through the Redis we already run. -->
+    <bucket4j.version>8.14.0</bucket4j.version>
   </properties>
 
   <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
@@ -97,6 +101,29 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+
+    <!-- Day 13: Bucket4j core — the token-bucket rate-limiting algorithm. A bucket holds up to
+         `capacity` tokens and refills them over time; every request tries to consume one token,
+         and is allowed only if one is available. This module is the pure, in-JVM implementation
+         (used by the per-instance fallback bucket); the "_jdk17" classifier is the build compiled
+         for Java 17+, matching this project's Java 21. -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j_jdk17-core</artifactId>
+      <version>${bucket4j.version}</version>
+    </dependency>
+
+    <!-- Day 13: Bucket4j's Lettuce (Redis) integration — the DISTRIBUTED backend. It stores each
+         client's bucket state IN Redis and mutates it with an atomic compare-and-swap Lua script, so
+         every app instance sharing that Redis enforces ONE global limit per client (not per node). We
+         reuse the same Redis that already backs the Day 11 cache via a LettuceBasedProxyManager. This
+         "-lettuce" module (built on the Lettuce client we already have on the classpath) pulls in the
+         redis-common + core modules transitively; we declare core explicitly above for clarity. -->
+    <dependency>
+      <groupId>com.bucket4j</groupId>
+      <artifactId>bucket4j_jdk17-lettuce</artifactId>
+      <version>${bucket4j.version}</version>
     </dependency>
 
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
