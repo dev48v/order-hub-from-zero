@@ -37,6 +37,12 @@ app:
     default-page-size: 5
     max-page-size: 20
 
+  # Day 13: a roomier limit while developing so you don't trip the limiter during manual testing,
+  # yet the whole mechanism still runs end to end. 100 requests / minute per client.
+  ratelimit:
+    capacity: 100
+    refill-period: 1m
+
 # Day 10: expose the API docs while developing. The base file keeps these off; here we
 # turn the OpenAPI spec (/v3/api-docs) and Swagger UI (/swagger-ui.html) back on so you
 # can browse and "try it out" against the running app locally.

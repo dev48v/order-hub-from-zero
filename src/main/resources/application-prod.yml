@@ -42,3 +42,11 @@ app:
     max-quantity: 5000
     default-page-size: 20
     max-page-size: 200
+
+  # Day 13: the real protective limit in production — tight enough to shield the database from a
+  # single abusive client, generous enough for normal usage. 60 requests / minute per client. In a
+  # multi-instance deploy this is enforced GLOBALLY because the buckets live in the shared Redis
+  # (${REDIS_HOST}/${REDIS_PORT} above), not per node. Tune via APP_RATELIMIT_CAPACITY if needed.
+  ratelimit:
+    capacity: 60
+    refill-period: 1m
