@@ -50,3 +50,17 @@ app:
   ratelimit:
     capacity: 60
     refill-period: 1m
+
+# Day 14: a STEADIER breaker for production. A larger sliding window makes the failure rate
+# statistically meaningful (one unlucky error can't trip it), a higher minimum defers evaluation
+# until there's real traffic, and a longer OPEN cooldown gives a genuinely struggling downstream
+# time to recover before we probe it again. The threshold stays at 50%.
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5

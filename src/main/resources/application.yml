@@ -101,3 +101,55 @@ app:
     enabled: true
     capacity: 20
     refill-period: 1m
+
+# Day 14: Resilience4j circuit breaker for the "inventory" downstream (InventoryClient.checkStock,
+# annotated @CircuitBreaker(name = "inventory")). The breaker watches recent call outcomes and, once
+# too many fail, trips OPEN — short-circuiting every call straight to the fallback for a cooldown so
+# the struggling dependency isn't hammered — then probes with a few HALF_OPEN trial calls before
+# closing again. Every knob below is externalised so it can be retuned per profile / env var with no
+# recompile. These are the shared defaults; the dev profile makes them snappy for demos, prod widens
+# the window for statistical stability.
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory:
+        # COUNT_BASED: the window is the last N calls (not a time span). Simple and deterministic —
+        # the failure rate is computed over exactly the last `slidingWindowSize` completed calls.
+        sliding-window-type: COUNT_BASED
+        # The window is the last 10 calls. The breaker only starts EVALUATING the failure rate once
+        # at least `minimumNumberOfCalls` have been recorded, so a couple of early failures on a cold
+        # start don't trip it.
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        # Trip OPEN when 50% or more of the calls in the window failed. With size 10 that's 5+ of the
+        # last 10 calls failing.
+        failure-rate-threshold: 50
+        # While OPEN, stay OPEN for this long, short-circuiting to the fallback, before moving to
+        # HALF_OPEN to test the waters. Kept short here; the prod profile lengthens it.
+        wait-duration-in-open-state: 10s
+        # In HALF_OPEN, allow this many trial calls through. If enough of them succeed (per the same
+        # failure-rate threshold) the breaker CLOSES; if they fail it goes back to OPEN.
+        permitted-number-of-calls-in-half-open-state: 3
+        # Move to HALF_OPEN automatically after the wait, without needing an incoming call to nudge it.
+        automatic-transition-from-open-to-half-open-enabled: true
+        # Count the stub's own failure as a breaker failure; everything else is recorded too by default.
+        record-exceptions:
+          - dev.dev48v.orderhub.inventory.InventoryUnavailableException
+        # Publish state-transition/call events to the Actuator event buffer so they're observable.
+        register-health-indicator: true
+
+# Day 14: expose just enough Actuator to OBSERVE the breaker without opening the whole management
+# surface. `health` (with the Resilience4j circuit-breaker health indicator shown in full) and
+# `circuitbreakers` / `circuitbreakerevents` (the state + a rolling event stream). Everything else
+# stays off by default — same conservative posture as the OpenAPI docs.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, circuitbreakers, circuitbreakerevents
+  endpoint:
+    health:
+      show-details: always
+  health:
+    circuitbreakers:
+      enabled: true

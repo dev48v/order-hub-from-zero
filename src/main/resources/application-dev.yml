@@ -51,3 +51,16 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+
+# Day 14: a SNAPPY breaker for local demos — a small window and a short OPEN cooldown so you can
+# trip it and watch it recover within a few seconds of clicking around, instead of waiting the
+# production cooldown. Same shape as the base config, just tuned for a fast feedback loop.
+resilience4j:
+  circuitbreaker:
+    instances:
+      inventory:
+        sliding-window-size: 6
+        minimum-number-of-calls: 4
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 2
