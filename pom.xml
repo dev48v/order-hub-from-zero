@@ -31,6 +31,13 @@
          Java 17+ — the right ones for this Java 21 project — and the Lettuce-backed distributed
          proxy manager we use to share token buckets across nodes through the Redis we already run. -->
     <bucket4j.version>8.14.0</bucket4j.version>
+    <!-- Day 14: Resilience4j version. 2.2.0 is the current line for the dedicated Spring Boot 3
+         starter (resilience4j-spring-boot3) — it targets Spring Boot 3.x / Jakarta and Java 17+,
+         matching this project. It brings the @CircuitBreaker / @Retry / @TimeLimiter / @Bulkhead
+         annotations (woven by AOP), binds their config from resilience4j.* in application.yml, and
+         wires the circuit-breaker state into Actuator health + a Micrometer event stream. The
+         aspects only take effect with spring-boot-starter-aop on the classpath. -->
+    <resilience4j.version>2.2.0</resilience4j.version>
   </properties>
 
   <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
@@ -124,6 +131,39 @@
       <groupId>com.bucket4j</groupId>
       <artifactId>bucket4j_jdk17-lettuce</artifactId>
       <version>${bucket4j.version}</version>
+    </dependency>
+
+    <!-- Day 14: Resilience4j — the fault-tolerance library. This is the circuit breaker (and, from
+         Day 15, retry/timeout/bulkhead). The "-spring-boot3" starter wires it into Spring Boot 3: it
+         registers the CircuitBreakerRegistry, binds every breaker's tuning (sliding window, failure
+         threshold, wait duration, half-open trial calls) from resilience4j.circuitbreaker.* in
+         application.yml, and exposes the breaker state through Actuator. A @CircuitBreaker on a bean
+         method then trips OPEN when the recent failure rate crosses the threshold, short-circuiting
+         straight to the fallback instead of hammering a failing dependency. Version pinned via the
+         resilience4j.version property (2.2.x = the Spring Boot 3 line). -->
+    <dependency>
+      <groupId>io.github.resilience4j</groupId>
+      <artifactId>resilience4j-spring-boot3</artifactId>
+      <version>${resilience4j.version}</version>
+    </dependency>
+
+    <!-- Day 14: Spring AOP — Resilience4j's annotations (@CircuitBreaker, and the later
+         @Retry/@TimeLimiter/@Bulkhead) are implemented as AROUND advice woven by aspects. Those
+         aspects need an AOP runtime; this starter pulls in spring-aop + AspectJ weaving so the
+         annotations on our InventoryClient methods are actually intercepted. Without it the
+         annotations are silently inert. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+
+    <!-- Day 14: Actuator — surfaces the live circuit-breaker state. Resilience4j contributes a
+         "circuitBreakers" health indicator and a /actuator/circuitbreakerevents stream (state
+         transitions, calls, failure rate) once this is on the classpath, so the breaker is
+         observable at runtime, not just in logs. Also the standard Spring Boot health/info base. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
