@@ -6,14 +6,14 @@
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100vw; height: 100vh; }
-  body { background: linear-gradient(135deg, #0b1f24, #0f2e33 55%, #0b1f24);
+  body { background: linear-gradient(135deg, #0b1226, #111f3a 55%, #0b1226);
     font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #f1f5f9; overflow: hidden; position: relative;
     padding: 2.8vh 3.6vw 3.4vh; display: flex; flex-direction: column; }
 
   /* header */
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
-  .series-badge { display: inline-block; background: linear-gradient(90deg, #0d9488, #14b8a6); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
-  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #5eead4, #14b8a6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
+  .series-badge { display: inline-block; background: linear-gradient(90deg, #2563eb, #3b82f6); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
+  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #93c5fd, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
   .sub { font-size: 17px; font-weight: 700; color: #f8fafc; margin-top: 6px; }
   .tagline { font-size: 13.5px; color: #94a3b8; margin-top: 3px; }
   .tag-col { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; padding-top: 4px; }
@@ -25,12 +25,12 @@
   .day { background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148,163,184,0.12); border-radius: 10px; padding: 10px 13px; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
   .day .d { font-size: 11.5px; font-weight: 800; color: #64748b; letter-spacing: 0.4px; }
   .day .t { font-size: 15px; font-weight: 700; color: #dbe4ee; line-height: 1.1; }
-  .day.live { background: linear-gradient(135deg, #0d9488, #14b8a6); border-color: #14b8a6; }
+  .day.live { background: linear-gradient(135deg, #2563eb, #3b82f6); border-color: #3b82f6; }
   .day.live .d { color: rgba(255,255,255,0.85); }
   .day.live .t { color: #fff; }
-  .day.phase { border-left: 3px solid #14b8a6; background: rgba(20, 184, 166,0.1); }
-  .day.phase .d { color: #5eead4; }
-  .day.phase.live { background: linear-gradient(135deg, #0d9488, #14b8a6); border-color: #14b8a6; border-left: 3px solid #5eead4; }
+  .day.phase { border-left: 3px solid #3b82f6; background: rgba(59, 130, 246,0.1); }
+  .day.phase .d { color: #93c5fd; }
+  .day.phase.live { background: linear-gradient(135deg, #2563eb, #3b82f6); border-color: #3b82f6; border-left: 3px solid #93c5fd; }
   .day.phase.live .d { color: rgba(255,255,255,0.9); }
   .day.phase.live .t { color: #fff; }
 
@@ -38,12 +38,12 @@
   .foot { margin-top: 13px; display: flex; justify-content: space-between; align-items: center; }
   .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: #94a3b8; font-weight: 600; }
   .legend .sw { display: inline-block; width: 13px; height: 13px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
-  .sw.l { background: linear-gradient(135deg, #0d9488, #14b8a6); }
-  .sw.p { background: rgba(20, 184, 166,0.1); border-left: 3px solid #14b8a6; }
+  .sw.l { background: linear-gradient(135deg, #2563eb, #3b82f6); }
+  .sw.p { background: rgba(59, 130, 246,0.1); border-left: 3px solid #3b82f6; }
   .url { font-size: 14px; color: #64748b; font-weight: 600; }
   .next { margin-top: 7px; font-size: 12.5px; color: #e2e8f0; font-weight: 600; }
 
-  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #0d9488, #14b8a6, #0d9488); }
+  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #2563eb, #3b82f6, #2563eb); }
 </style>
 </head>
 <body>
@@ -75,9 +75,9 @@
     <div class="day"><div class="d">DAY 9 ✓</div><div class="t">Testcontainers</div></div>
     <div class="day"><div class="d">DAY 10 ✓</div><div class="t">OpenAPI + Docker</div></div>
     <div class="day phase"><div class="d">DAY 11 ✓ · PERFORMANCE</div><div class="t">Redis caching</div></div>
-    <div class="day live"><div class="d">DAY 12 ✓</div><div class="t">Cache strategies</div></div>
+    <div class="day"><div class="d">DAY 12 ✓</div><div class="t">Cache strategies</div></div>
 
-    <div class="day"><div class="d">DAY 13</div><div class="t">Rate limiting</div></div>
+    <div class="day live"><div class="d">DAY 13</div><div class="t">Rate limiting</div></div>
     <div class="day"><div class="d">DAY 14</div><div class="t">Circuit breaker</div></div>
     <div class="day"><div class="d">DAY 15</div><div class="t">Retry + timeout</div></div>
     <div class="day"><div class="d">DAY 16</div><div class="t">Idempotency keys</div></div>
