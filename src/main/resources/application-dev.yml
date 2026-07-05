@@ -64,3 +64,12 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 5s
         permitted-number-of-calls-in-half-open-state: 2
+
+  # Day 15: snappy retries locally — short base wait so a demo doesn't stall on backoff, but the
+  # exponential + jitter behaviour is still exercised end to end.
+  retry:
+    instances:
+      inventory:
+        max-attempts: 3
+        wait-duration: 100ms
+        exponential-backoff-multiplier: 2

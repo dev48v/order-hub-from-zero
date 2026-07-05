@@ -64,3 +64,13 @@ resilience4j:
         failure-rate-threshold: 50
         wait-duration-in-open-state: 30s
         permitted-number-of-calls-in-half-open-state: 5
+
+  # Day 15: steadier retries in production. A longer base wait gives a struggling downstream real
+  # recovery time between attempts; exponential backoff + jitter still spread the load so many
+  # instances retrying at once don't re-synchronise into a spike.
+  retry:
+    instances:
+      inventory:
+        max-attempts: 3
+        wait-duration: 500ms
+        exponential-backoff-multiplier: 2

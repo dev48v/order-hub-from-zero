@@ -138,6 +138,38 @@ resilience4j:
         # Publish state-transition/call events to the Actuator event buffer so they're observable.
         register-health-indicator: true
 
+  # Day 15: RETRY for the "inventory" downstream (InventoryClient.checkStockResilient, annotated
+  # @Retry(name = "inventory")). A retry gives a TRANSIENT blip — a dropped packet, a brief 5xx, a
+  # momentary timeout — a second (and third) chance before we give up and fall back. Two things make
+  # it safe rather than a self-inflicted DDoS: (1) EXPONENTIAL BACKOFF + JITTER, so attempts spread out
+  # in time instead of retrying in a tight, synchronised burst; (2) a RETRY-EXCEPTIONS allow-list, so
+  # we only retry faults that a retry could actually fix (never a 4xx-style bad request). These are the
+  # shared defaults; the dev profile shortens the waits for snappy demos, prod widens them.
+  retry:
+    instances:
+      inventory:
+        # Total attempts INCLUDING the first — so 3 means the original call + up to 2 retries.
+        max-attempts: 3
+        # The base gap before the first retry. Grows with the multiplier below.
+        wait-duration: 300ms
+        # EXPONENTIAL BACKOFF: each wait is the previous one × multiplier (300ms → 600ms → 1200ms...),
+        # so a struggling dependency gets progressively more breathing room instead of a fixed drumbeat.
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # JITTER: randomise each wait by ± this factor around the computed value. Without it, many
+        # clients that failed at the same instant would all retry at the same instant — a "thundering
+        # herd" that re-synchronises load spikes. Combined with exponential backoff, Resilience4j uses
+        # an exponential-random interval function.
+        enable-randomized-wait: true
+        randomized-wait-factor: 0.5
+        # ONLY these (transient) exceptions are retried. Anything else propagates immediately — a
+        # malformed request (4xx-like InvalidItemException) is deterministic, so retrying it is pointless.
+        retry-exceptions:
+          - dev.dev48v.orderhub.inventory.InventoryUnavailableException
+          - java.util.concurrent.TimeoutException
+        ignore-exceptions:
+          - dev.dev48v.orderhub.inventory.InvalidItemException
+
 # Day 14: expose just enough Actuator to OBSERVE the breaker without opening the whole management
 # surface. `health` (with the Resilience4j circuit-breaker health indicator shown in full) and
 # `circuitbreakers` / `circuitbreakerevents` (the state + a rolling event stream). Everything else
