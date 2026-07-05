@@ -84,7 +84,12 @@ public class InventoryClient {
     // call: the future runs the work on another thread, and the TimeLimiter completes it exceptionally
     // if it overruns. Resilience4j weaves the aspects around this method in the order documented above.
     // On exhausted retries / timeout / open breaker / full bulkhead, checkStockResilientFallback() runs.
+    // Annotations listed OUTER → INNER to mirror the aspect order (though the order is config-driven,
+    // not source-driven). @CircuitBreaker here has NO fallbackMethod on purpose: the fallback belongs on
+    // the outermost @Retry so retries happen BEFORE we give up. This breaker shares the "inventory"
+    // instance with the synchronous checkStock() above — same downstream, same window.
     @Retry(name = "inventory", fallbackMethod = "checkStockResilientFallback")
+    @CircuitBreaker(name = "inventory")
     @TimeLimiter(name = "inventory")
     @Bulkhead(name = "inventory", type = Bulkhead.Type.SEMAPHORE)
     public CompletableFuture<InventoryStatus> checkStockResilient(String item) {

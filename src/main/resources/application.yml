@@ -132,9 +132,16 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         # Move to HALF_OPEN automatically after the wait, without needing an incoming call to nudge it.
         automatic-transition-from-open-to-half-open-enabled: true
-        # Count the stub's own failure as a breaker failure; everything else is recorded too by default.
+        # Count the stub's own failure (and, via the composition, a TimeoutException) as a breaker failure.
         record-exceptions:
           - dev.dev48v.orderhub.inventory.InventoryUnavailableException
+          - java.util.concurrent.TimeoutException
+        # Day 15: do NOT count these toward tripping the breaker. A 4xx-like bad request is the caller's
+        # fault, not the dependency's; a full-bulkhead rejection is our own back-pressure, not the
+        # dependency erroring. Counting either would wrongly push the breaker toward OPEN.
+        ignore-exceptions:
+          - dev.dev48v.orderhub.inventory.InvalidItemException
+          - io.github.resilience4j.bulkhead.BulkheadFullException
         # Publish state-transition/call events to the Actuator event buffer so they're observable.
         register-health-indicator: true
 
@@ -167,8 +174,14 @@ resilience4j:
         retry-exceptions:
           - dev.dev48v.orderhub.inventory.InventoryUnavailableException
           - java.util.concurrent.TimeoutException
+        # Never retry these. A 4xx-like InvalidItemException is deterministic. And because @Retry is the
+        # OUTERMOST aspect, when the inner CircuitBreaker is OPEN each attempt raises CallNotPermittedException,
+        # and when the inner Bulkhead is full it raises BulkheadFullException — retrying those just hammers a
+        # component that's already saying "no". Ignoring them makes the composed call fail FAST to the fallback.
         ignore-exceptions:
           - dev.dev48v.orderhub.inventory.InvalidItemException
+          - io.github.resilience4j.circuitbreaker.CallNotPermittedException
+          - io.github.resilience4j.bulkhead.BulkheadFullException
 
   # Day 15: TIME LIMITER for the "inventory" downstream. A retry handles a call that FAILS; a time
   # limiter handles a call that HANGS — arguably worse, because a stuck call ties up a thread and a
