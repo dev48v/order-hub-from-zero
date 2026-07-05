@@ -74,3 +74,10 @@ resilience4j:
         max-attempts: 3
         wait-duration: 500ms
         exponential-backoff-multiplier: 2
+
+  # Day 15: a more forgiving deadline in production — real network round-trips take longer than a
+  # local stub, so 2s avoids cutting off calls that would have succeeded, while still bounding the wait.
+  timelimiter:
+    instances:
+      inventory:
+        timeout-duration: 2s

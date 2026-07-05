@@ -170,6 +170,22 @@ resilience4j:
         ignore-exceptions:
           - dev.dev48v.orderhub.inventory.InvalidItemException
 
+  # Day 15: TIME LIMITER for the "inventory" downstream. A retry handles a call that FAILS; a time
+  # limiter handles a call that HANGS — arguably worse, because a stuck call ties up a thread and a
+  # connection indefinitely while the user stares at a spinner. It puts a hard DEADLINE on the async
+  # call: if the CompletableFuture hasn't completed within timeout-duration, Resilience4j completes it
+  # with a TimeoutException. That timeout is then a first-class outcome — @Retry retries it (it's in
+  # retry-exceptions) and, because CircuitBreaker sits outside TimeLimiter, it counts toward tripping
+  # the breaker, so a merely-SLOW dependency is treated as a failing one.
+  timelimiter:
+    instances:
+      inventory:
+        # A call that takes longer than this is abandoned and surfaced as a TimeoutException.
+        timeout-duration: 1s
+        # Interrupt the running future when the deadline fires, so the abandoned work doesn't keep
+        # occupying a thread after we've already given up on its result.
+        cancel-running-future: true
+
 # Day 14: expose just enough Actuator to OBSERVE the breaker without opening the whole management
 # surface. `health` (with the Resilience4j circuit-breaker health indicator shown in full) and
 # `circuitbreakers` / `circuitbreakerevents` (the state + a rolling event stream). Everything else

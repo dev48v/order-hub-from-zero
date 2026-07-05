@@ -73,3 +73,10 @@ resilience4j:
         max-attempts: 3
         wait-duration: 100ms
         exponential-backoff-multiplier: 2
+
+  # Day 15: a tighter deadline locally so you can trip a timeout by dialling up latency and see the
+  # fallback quickly, without waiting a full production second.
+  timelimiter:
+    instances:
+      inventory:
+        timeout-duration: 500ms

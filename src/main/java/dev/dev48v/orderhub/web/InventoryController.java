@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.concurrent.CompletableFuture;
+
 // Day 14 — a small endpoint that EXERCISES the circuit breaker so it's observable end to end.
 // WHY a dedicated endpoint: the breaker guards InventoryClient.checkStock(), and this is the HTTP
 // door onto that call. Hitting it repeatedly with the downstream dialled to "flaky" (see the /failure-rate
@@ -52,6 +54,24 @@ public class InventoryController {
         return inventoryClient.checkStock(item);
     }
 
+    // Day 15 — the fully-resilient read: the same stock check wrapped in Retry + CircuitBreaker +
+    // TimeLimiter + Bulkhead. Returns a CompletableFuture so Spring MVC handles it asynchronously (the
+    // TimeLimiter needs an async call to put a deadline on). Whatever goes wrong — a transient blip
+    // that outlasts the retries, a timeout, an OPEN breaker, a full bulkhead — the caller still gets a
+    // 200 with a degraded body, never a 500 or a hang. Dial /failure-rate and /latency to drive it.
+    @GetMapping("/{item}/resilient")
+    @Operation(summary = "Check stock through the full resilience stack (Day 15)",
+            description = "Calls the downstream through Retry + CircuitBreaker + TimeLimiter + Bulkhead. "
+                    + "Retries transient failures with backoff, times out a hanging call, caps concurrent "
+                    + "calls, and returns a graceful degraded response on any failure.")
+    @ApiResponse(responseCode = "200",
+            description = "Stock status — live, or a degraded fallback after retries/timeout/bulkhead")
+    public CompletableFuture<InventoryStatus> checkStockResilient(
+            @Parameter(description = "Item name to check", example = "Keyboard")
+            @PathVariable String item) {
+        return inventoryClient.checkStockResilient(item);
+    }
+
     // Demo/test control: set the stubbed downstream's failure probability (0.0 = healthy, 1.0 = fully
     // down). Flip it to ~0.8 and hammer GET /api/inventory/{item} a dozen times to trip the breaker
     // OPEN; drop it back to 0.0 and, after the wait duration, watch it recover through HALF_OPEN.
@@ -69,7 +89,26 @@ public class InventoryController {
         return new FailureRateResponse(inventoryClient.getFailureRate());
     }
 
+    // Day 15 demo/test control: set the stubbed downstream's artificial latency (ms). Dial it ABOVE the
+    // TimeLimiter's timeout-duration and hit GET /api/inventory/{item}/resilient to watch a slow call
+    // get cut off and diverted to the degraded fallback. A POST because it mutates server-side state.
+    @PostMapping("/latency")
+    @Operation(summary = "Set the downstream latency in ms (demo control)",
+            description = "Adjusts how long the stubbed inventory downstream takes, so a call can be "
+                    + "driven past the TimeLimiter's deadline and trip a timeout → fallback.")
+    @ApiResponse(responseCode = "200", description = "The latency now in effect")
+    public LatencyResponse setLatency(
+            @Parameter(description = "Artificial latency in milliseconds", example = "1500")
+            @RequestParam long ms) {
+        inventoryClient.setLatencyMillis(ms);
+        return new LatencyResponse(inventoryClient.getLatencyMillis());
+    }
+
     // A tiny response record for the toggle so the endpoint returns JSON, not a bare number.
     public record FailureRateResponse(double failureRate) {
+    }
+
+    // Day 15: response record for the latency toggle.
+    public record LatencyResponse(long latencyMillis) {
     }
 }
