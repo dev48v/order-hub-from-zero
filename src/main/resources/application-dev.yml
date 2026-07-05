@@ -80,3 +80,11 @@ resilience4j:
     instances:
       inventory:
         timeout-duration: 500ms
+
+  # Day 15: a small bulkhead locally so you can saturate it with a handful of concurrent requests and
+  # watch the overflow get rejected to the fallback.
+  bulkhead:
+    instances:
+      inventory:
+        max-concurrent-calls: 3
+        max-wait-duration: 0

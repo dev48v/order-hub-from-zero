@@ -186,6 +186,21 @@ resilience4j:
         # occupying a thread after we've already given up on its result.
         cancel-running-future: true
 
+  # Day 15: BULKHEAD for the "inventory" downstream — the ship-hull metaphor: compartmentalise so one
+  # flooded section can't sink the vessel. It caps how many calls to this ONE dependency may be in
+  # flight at once. WHY it matters: if inventory-service goes slow, without a bulkhead every incoming
+  # request piles up waiting on it, and eventually the whole app's thread pool is exhausted — a problem
+  # in one dependency becomes total unavailability. With a semaphore bulkhead, only max-concurrent-calls
+  # threads can be stuck on inventory; the (N+1)th call is rejected immediately with BulkheadFullException
+  # (→ fallback), leaving threads free to serve everything else. This is the SEMAPHORE type: a simple
+  # permit count on the caller's own thread (as opposed to the THREADPOOL type, which hands work to a
+  # separate, bounded pool). max-wait-duration 0 = fail fast when full rather than queueing.
+  bulkhead:
+    instances:
+      inventory:
+        max-concurrent-calls: 8
+        max-wait-duration: 0
+
 # Day 14: expose just enough Actuator to OBSERVE the breaker without opening the whole management
 # surface. `health` (with the Resilience4j circuit-breaker health indicator shown in full) and
 # `circuitbreakers` / `circuitbreakerevents` (the state + a rolling event stream). Everything else

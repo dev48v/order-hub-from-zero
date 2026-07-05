@@ -81,3 +81,11 @@ resilience4j:
     instances:
       inventory:
         timeout-duration: 2s
+
+  # Day 15: a wider bulkhead in production to allow healthy throughput to the dependency, while still
+  # bounding the blast radius if it slows down so it can't consume the whole thread pool.
+  bulkhead:
+    instances:
+      inventory:
+        max-concurrent-calls: 25
+        max-wait-duration: 0

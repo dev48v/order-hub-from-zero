@@ -1,5 +1,6 @@
 package dev.dev48v.orderhub.inventory;
 
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
@@ -85,6 +86,7 @@ public class InventoryClient {
     // On exhausted retries / timeout / open breaker / full bulkhead, checkStockResilientFallback() runs.
     @Retry(name = "inventory", fallbackMethod = "checkStockResilientFallback")
     @TimeLimiter(name = "inventory")
+    @Bulkhead(name = "inventory", type = Bulkhead.Type.SEMAPHORE)
     public CompletableFuture<InventoryStatus> checkStockResilient(String item) {
         // supplyAsync runs doCheckStock() on a worker thread; the returned future completes only when
         // that work finishes, so the bulkhead permit (acquired by the inner aspect) is held for the
