@@ -1,5 +1,7 @@
 package dev.dev48v.orderhub.web;
 
+import dev.dev48v.orderhub.idempotency.IdempotencyInProgressException;
+import dev.dev48v.orderhub.idempotency.IdempotencyKeyReuseException;
 import dev.dev48v.orderhub.service.OrderNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -69,6 +71,28 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, ex.getMessage());
         problem.setTitle("Invalid order state");
+        return stamped(problem);
+    }
+
+    // Day 16 — 409 Conflict: a request arrived with an Idempotency-Key that another request is still
+    // processing (the in-flight race). We can't replay a result yet and mustn't run the handler twice,
+    // so we tell the client to retry — its retry will get the replayed result once the first finishes.
+    @ExceptionHandler(IdempotencyInProgressException.class)
+    public ProblemDetail handleIdempotencyInProgress(IdempotencyInProgressException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Idempotent request in progress");
+        return stamped(problem);
+    }
+
+    // Day 16 — 422 Unprocessable Entity: the same Idempotency-Key was reused for a DIFFERENT payload.
+    // That's a client bug (a key must identify ONE logical operation), so we refuse it loudly rather
+    // than replay a stale answer or silently run the new request.
+    @ExceptionHandler(IdempotencyKeyReuseException.class)
+    public ProblemDetail handleIdempotencyKeyReuse(IdempotencyKeyReuseException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
+        problem.setTitle("Idempotency-Key reused with a different request");
         return stamped(problem);
     }
 

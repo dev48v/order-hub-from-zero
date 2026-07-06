@@ -1,6 +1,7 @@
 package dev.dev48v.orderhub.web;
 
 import dev.dev48v.orderhub.domain.Order;
+import dev.dev48v.orderhub.idempotency.Idempotent;
 import dev.dev48v.orderhub.service.OrderService;
 import dev.dev48v.orderhub.web.dto.CreateOrderRequest;
 import dev.dev48v.orderhub.web.dto.OrderResponse;
@@ -36,12 +37,22 @@ public class OrderController {
         this.service = service;
     }
 
+    // Day 16 — @Idempotent makes this POST safe to retry. When the client sends an Idempotency-Key
+    // header, IdempotencyAspect processes the FIRST request normally and remembers its response; any
+    // repeat with the same key replays that exact response (same 201, same order) instead of creating
+    // a second order — so a network retry, a double-click or a resumed mobile request can never place
+    // a duplicate. With no key, the endpoint behaves exactly as before.
     @PostMapping
+    @Idempotent
     @Operation(summary = "Place a new order",
-            description = "Creates an order in the PLACED state and returns it with a Location header.")
+            description = "Creates an order in the PLACED state and returns it with a Location header. "
+                    + "Send an Idempotency-Key header to make retries safe: repeats with the same key "
+                    + "replay the original response without creating a duplicate order.")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Order created"),
-            @ApiResponse(responseCode = "400", description = "Validation failed (RFC-7807 problem+json)")
+            @ApiResponse(responseCode = "400", description = "Validation failed (RFC-7807 problem+json)"),
+            @ApiResponse(responseCode = "409", description = "A request with the same Idempotency-Key is still in flight"),
+            @ApiResponse(responseCode = "422", description = "The Idempotency-Key was reused with a different payload")
     })
     public ResponseEntity<OrderResponse> create(@Valid @RequestBody CreateOrderRequest req) {
         Order order = service.placeOrder(req.customer(), req.item(), req.quantity());
