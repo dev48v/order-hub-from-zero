@@ -102,6 +102,18 @@ app:
     capacity: 20
     refill-period: 1m
 
+  # Day 16: idempotency keys, bound onto IdempotencyProperties (prefix "app.idempotency"). A client
+  # sends the header named below on an unsafe POST; the FIRST request is processed and its response
+  # remembered in Redis for `ttl`, so any repeat with the same key replays that response instead of
+  # creating a duplicate. `lock-ttl` is the short life of the initial in-flight reservation (so a
+  # crashed request can't wedge the key for the whole ttl). Overridable per profile / via env vars
+  # (APP_IDEMPOTENCY_TTL, APP_IDEMPOTENCY_LOCKTTL). Entries live in the same Redis as the cache.
+  idempotency:
+    enabled: true
+    header-name: Idempotency-Key
+    ttl: 24h
+    lock-ttl: 5m
+
 # Day 14: Resilience4j circuit breaker for the "inventory" downstream (InventoryClient.checkStock,
 # annotated @CircuitBreaker(name = "inventory")). The breaker watches recent call outcomes and, once
 # too many fail, trips OPEN — short-circuiting every call straight to the fallback for a cooldown so

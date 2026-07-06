@@ -1,5 +1,6 @@
 package dev.dev48v.orderhub;
 
+import dev.dev48v.orderhub.config.IdempotencyProperties;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.config.RateLimitProperties;
 import org.springframework.boot.SpringApplication;
@@ -15,8 +16,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 // Day 7: @EnableConfigurationProperties registers OrderProperties as a bean so it
 // can be injected anywhere, and binds the "app.orders.*" keys onto it at startup.
 // Day 13: RateLimitProperties joins it, binding "app.ratelimit.*" (capacity + refill period).
+// Day 16: IdempotencyProperties joins it too, binding "app.idempotency.*" (header, ttl, lock ttl).
 @SpringBootApplication
-@EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class})
+@EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class, IdempotencyProperties.class})
 public class OrderHubApplication {
     public static void main(String[] args) {
         SpringApplication.run(OrderHubApplication.class, args);
