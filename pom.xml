@@ -4,7 +4,33 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
 
-  <!-- Spring Boot's parent gives us sane dependency versions + the repackage plugin. -->
+  <!-- ============================================================================
+       Day 17 — Phase 3 KICKOFF: break the monolith into microservices.
+       ============================================================================
+       Until Day 16 this was a single Maven module: one pom, one Spring Boot app. Phase 3
+       turns it into a MONOREPO with multiple modules — several independently-deployable
+       Spring Boot apps that live in one git repo and build together under one reactor.
+
+       THIS FILE is the reactor / aggregator POM. Two jobs:
+         1. AGGREGATE — the <modules> list ties the child modules into one build, so a single
+            `mvn` at the root builds (and tests) every service in dependency order.
+         2. INHERIT — its own parent is spring-boot-starter-parent, so Boot's dependency
+            management, plugin management (the repackage plugin) and sensible defaults flow
+            DOWN to every child through this pom. Shared knobs — the Java version here — are
+            declared once and inherited everywhere.
+
+       WHY a reactor and not just two unrelated projects: one clone, one `mvn verify`, one set
+       of versions kept in lockstep. The services are still separate apps (separate jars,
+       separate ports, separate deploys) — this just keeps their SOURCE and BUILD together
+       while the system is small. When a service needs to scale or ship on its own cadence it
+       can be lifted out later; nothing here couples them at runtime.
+
+       Day 17 extracts the FIRST service — inventory-service — as a second Spring Boot app.
+       It does NOT yet talk to order-service over the wire: order-service keeps its in-process
+       inventory stub (the Day 14/15 resilience client). Day 18 replaces that stub with a real
+       HTTP call (OpenFeign), Day 19 adds Eureka discovery. Today is purely the structural
+       split: stand the second service up, own its own bounded context, prove both build.
+       ============================================================================ -->
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
@@ -13,229 +39,24 @@
   </parent>
 
   <groupId>dev.dev48v</groupId>
-  <artifactId>order-hub</artifactId>
+  <artifactId>order-hub-parent</artifactId>
   <version>0.1.0</version>
-  <name>OrderHub</name>
-  <description>An e-commerce order-fulfillment backend, built feature by feature.</description>
+  <!-- packaging=pom marks this as an aggregator: it builds no jar of its own, it drives the
+       modules below. -->
+  <packaging>pom</packaging>
+  <name>OrderHub :: Parent (reactor)</name>
+  <description>Monorepo reactor for the OrderHub microservices — one build, many services.</description>
 
   <properties>
+    <!-- Declared once here; every module inherits it, so all services compile on the same Java. -->
     <java.version>21</java.version>
-    <!-- Day 9: pull Testcontainers forward of the version the Spring Boot parent pins (1.19.8).
-         The bundled docker-java in 1.19.8 can't complete the /info handshake against very recent
-         Docker engines; this aligns every Testcontainers module on a build that can. -->
-    <testcontainers.version>1.21.4</testcontainers.version>
-    <!-- Day 10: springdoc-openapi version. 2.6.x is the line built for Spring Boot 3.3
-         (Spring MVC 6.1 / Jakarta) — the older 1.x line targets Spring Boot 2 and won't work. -->
-    <springdoc.version>2.6.0</springdoc.version>
-    <!-- Day 13: Bucket4j version. The 8.14.x line ships the "_jdk17" artifacts compiled for
-         Java 17+ — the right ones for this Java 21 project — and the Lettuce-backed distributed
-         proxy manager we use to share token buckets across nodes through the Redis we already run. -->
-    <bucket4j.version>8.14.0</bucket4j.version>
-    <!-- Day 14: Resilience4j version. 2.2.0 is the current line for the dedicated Spring Boot 3
-         starter (resilience4j-spring-boot3) — it targets Spring Boot 3.x / Jakarta and Java 17+,
-         matching this project. It brings the @CircuitBreaker / @Retry / @TimeLimiter / @Bulkhead
-         annotations (woven by AOP), binds their config from resilience4j.* in application.yml, and
-         wires the circuit-breaker state into Actuator health + a Micrometer event stream. The
-         aspects only take effect with spring-boot-starter-aop on the classpath. -->
-    <resilience4j.version>2.2.0</resilience4j.version>
   </properties>
 
-  <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
-       Declared here (ahead of the Spring Boot parent's dependency management) so testcontainers.version
-       above wins. -->
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>org.testcontainers</groupId>
-        <artifactId>testcontainers-bom</artifactId>
-        <version>${testcontainers.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
+  <!-- The services in the monorepo. `mvn` at the root builds them together, in the order the
+       reactor computes from any inter-module dependencies. Adding a module later (a gateway, a
+       payment service) is a one-line change here. -->
+  <modules>
+    <module>order-service</module>
+  </modules>
 
-  <dependencies>
-    <!-- Day 51: REST endpoints (Tomcat + Spring MVC + Jackson, all in one starter). -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-web</artifactId>
-    </dependency>
-
-    <!-- Day 51: Bean Validation (@NotBlank, @Positive) so bad requests fail fast. -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-validation</artifactId>
-    </dependency>
-
-    <!-- Day 2: Spring Data JPA — repositories + Hibernate ORM for real persistence. -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jpa</artifactId>
-    </dependency>
-
-    <!-- Day 11: Spring Data Redis — the cache backend. This starter pulls in Spring Data Redis
-         and the Lettuce client (a modern, Netty-based, thread-safe connection pool), so a single
-         RedisConnectionFactory can back Spring's caching abstraction. We drive it purely through
-         the @Cacheable / @CacheEvict annotations — no hand-written RedisTemplate calls. -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-redis</artifactId>
-    </dependency>
-
-    <!-- Day 11: the parameter-names Jackson module. Our cached values (the immutable Order domain
-         object) are reconstructed by Jackson from JSON; this module lets Jackson bind JSON fields
-         to constructor PARAMETERS by name (matching the @JsonCreator on Order) instead of needing a
-         no-arg constructor + setters. Spring Boot's Jackson auto-config registers it automatically. -->
-    <dependency>
-      <groupId>com.fasterxml.jackson.module</groupId>
-      <artifactId>jackson-module-parameter-names</artifactId>
-    </dependency>
-
-    <!-- Day 11: JSR-310 (java.time) Jackson module so Instant serializes as an ISO-8601 string
-         in the cache instead of failing. Version is managed by the Spring Boot parent. -->
-    <dependency>
-      <groupId>com.fasterxml.jackson.datatype</groupId>
-      <artifactId>jackson-datatype-jsr310</artifactId>
-    </dependency>
-
-    <!-- Day 10: springdoc-openapi — generates an OpenAPI 3 spec from the controllers/DTOs
-         at runtime (served at /v3/api-docs) and bundles Swagger UI (/swagger-ui.html) to
-         browse and try the API. The "-starter-webmvc-ui" artifact is the right one for a
-         Spring MVC (Tomcat) app; it pulls in swagger-ui transitively. Version is pinned via
-         the springdoc.version property so it stays aligned with Spring Boot 3.3. -->
-    <dependency>
-      <groupId>org.springdoc</groupId>
-      <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-      <version>${springdoc.version}</version>
-    </dependency>
-
-    <!-- Day 13: Bucket4j core — the token-bucket rate-limiting algorithm. A bucket holds up to
-         `capacity` tokens and refills them over time; every request tries to consume one token,
-         and is allowed only if one is available. This module is the pure, in-JVM implementation
-         (used by the per-instance fallback bucket); the "_jdk17" classifier is the build compiled
-         for Java 17+, matching this project's Java 21. -->
-    <dependency>
-      <groupId>com.bucket4j</groupId>
-      <artifactId>bucket4j_jdk17-core</artifactId>
-      <version>${bucket4j.version}</version>
-    </dependency>
-
-    <!-- Day 13: Bucket4j's Lettuce (Redis) integration — the DISTRIBUTED backend. It stores each
-         client's bucket state IN Redis and mutates it with an atomic compare-and-swap Lua script, so
-         every app instance sharing that Redis enforces ONE global limit per client (not per node). We
-         reuse the same Redis that already backs the Day 11 cache via a LettuceBasedProxyManager. This
-         "-lettuce" module (built on the Lettuce client we already have on the classpath) pulls in the
-         redis-common + core modules transitively; we declare core explicitly above for clarity. -->
-    <dependency>
-      <groupId>com.bucket4j</groupId>
-      <artifactId>bucket4j_jdk17-lettuce</artifactId>
-      <version>${bucket4j.version}</version>
-    </dependency>
-
-    <!-- Day 14: Resilience4j — the fault-tolerance library. This is the circuit breaker (and, from
-         Day 15, retry/timeout/bulkhead). The "-spring-boot3" starter wires it into Spring Boot 3: it
-         registers the CircuitBreakerRegistry, binds every breaker's tuning (sliding window, failure
-         threshold, wait duration, half-open trial calls) from resilience4j.circuitbreaker.* in
-         application.yml, and exposes the breaker state through Actuator. A @CircuitBreaker on a bean
-         method then trips OPEN when the recent failure rate crosses the threshold, short-circuiting
-         straight to the fallback instead of hammering a failing dependency. Version pinned via the
-         resilience4j.version property (2.2.x = the Spring Boot 3 line). -->
-    <dependency>
-      <groupId>io.github.resilience4j</groupId>
-      <artifactId>resilience4j-spring-boot3</artifactId>
-      <version>${resilience4j.version}</version>
-    </dependency>
-
-    <!-- Day 14: Spring AOP — Resilience4j's annotations (@CircuitBreaker, and the later
-         @Retry/@TimeLimiter/@Bulkhead) are implemented as AROUND advice woven by aspects. Those
-         aspects need an AOP runtime; this starter pulls in spring-aop + AspectJ weaving so the
-         annotations on our InventoryClient methods are actually intercepted. Without it the
-         annotations are silently inert. -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-aop</artifactId>
-    </dependency>
-
-    <!-- Day 14: Actuator — surfaces the live circuit-breaker state. Resilience4j contributes a
-         "circuitBreakers" health indicator and a /actuator/circuitbreakerevents stream (state
-         transitions, calls, failure rate) once this is on the classpath, so the breaker is
-         observable at runtime, not just in logs. Also the standard Spring Boot health/info base. -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-actuator</artifactId>
-    </dependency>
-
-    <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
-         ddl-auto with explicit, reviewable schema changes that run identically on
-         H2 (local) and PostgreSQL (prod). -->
-    <dependency>
-      <groupId>org.flywaydb</groupId>
-      <artifactId>flyway-core</artifactId>
-    </dependency>
-
-    <!-- Day 3: Flyway 10+ moved per-database support into separate modules; this one
-         is required for Flyway to run against PostgreSQL. -->
-    <dependency>
-      <groupId>org.flywaydb</groupId>
-      <artifactId>flyway-database-postgresql</artifactId>
-    </dependency>
-
-    <!-- Day 2: PostgreSQL driver — the production database (runtime only). -->
-    <dependency>
-      <groupId>org.postgresql</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-
-    <!-- Day 2: H2 in-memory database — zero-setup persistence for local dev (runtime only). -->
-    <dependency>
-      <groupId>com.h2database</groupId>
-      <artifactId>h2</artifactId>
-      <scope>runtime</scope>
-    </dependency>
-
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-test</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <!-- Day 9: Testcontainers — spin up a REAL PostgreSQL in a throwaway Docker container
-         for the integration tests, so Flyway + JPA run against the same engine as prod
-         instead of H2. The Spring Boot parent already pins testcontainers.version (1.19.8),
-         so these modules inherit that version — no explicit <version> or BOM needed here. -->
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <!-- Day 9: the PostgreSQL module gives us PostgreSQLContainer with the right driver
-         and JDBC-URL wiring out of the box. -->
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>postgresql</artifactId>
-      <scope>test</scope>
-    </dependency>
-
-    <!-- Day 11: Testcontainers core gives us GenericContainer, used to spin up a throwaway
-         Redis for the full-stack integration test so @Cacheable/@CacheEvict run against a REAL
-         Redis (same as prod) instead of failing on a missing connection. Redis has no dedicated
-         Testcontainers module we need, so a GenericContainer on the standard image is enough. -->
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>testcontainers</artifactId>
-      <scope>test</scope>
-    </dependency>
-  </dependencies>
-
-  <build>
-    <plugins>
-      <plugin>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-maven-plugin</artifactId>
-      </plugin>
-    </plugins>
-  </build>
 </project>

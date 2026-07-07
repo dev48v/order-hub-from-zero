@@ -6,16 +6,22 @@
 # --- stage 1: build the jar (Maven + JDK 21) ---
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
-# Copy the POM first and pre-fetch dependencies. This layer is cached and only re-runs when
-# pom.xml changes, so day-to-day source edits don't re-download the world.
+# Day 17: this is now a multi-module reactor. Copy the reactor POM and every module POM first
+# (Maven parses the whole reactor even when building one module) and pre-fetch just the
+# order-service dependencies. This layer is cached and only re-runs when a pom.xml changes, so
+# day-to-day source edits don't re-download the world. We deploy ONLY the order API here, so we
+# build it with `-pl order-service -am` (this module + anything it depends on) — the inventory
+# service is a separate deployable and stays out of this image.
 COPY pom.xml .
-RUN mvn -q -B dependency:go-offline
+COPY order-service/pom.xml order-service/pom.xml
+COPY inventory-service/pom.xml inventory-service/pom.xml
+RUN mvn -q -B -pl order-service -am dependency:go-offline
 # Now the source. -DskipTests keeps the image build fast; tests run in CI, not here.
-COPY src ./src
-RUN mvn -q -B clean package -DskipTests
+COPY order-service/src ./order-service/src
+RUN mvn -q -B -pl order-service -am clean package -DskipTests
 # Unpack Spring Boot's layered jar so the runtime stage can copy each layer separately
 # (dependencies change rarely, application code often) for better Docker layer caching.
-RUN java -Djarmode=layertools -jar target/*.jar extract --destination target/extracted
+RUN java -Djarmode=layertools -jar order-service/target/*.jar extract --destination target/extracted
 
 # --- stage 2: lean runtime (JRE 21 only, non-root) ---
 FROM eclipse-temurin:21-jre

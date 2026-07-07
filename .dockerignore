@@ -3,8 +3,10 @@
 # build and risking stale artifacts leaking into the image. The Dockerfile builds the jar from
 # source inside the build stage, so none of this is needed.
 
-# Maven build output — rebuilt fresh inside the build stage.
+# Maven build output — rebuilt fresh inside the build stage. Day 17: also match the per-module
+# target/ dirs of the reactor (order-service/target, inventory-service/target).
 target/
+**/target/
 
 # The frontend is deployed separately (Vercel); it has no place in the API image.
 frontend/
