@@ -1,0 +1,25 @@
+# Day 17 — the Inventory service's OWN configuration, separate from order-service's.
+# Each microservice has its own config file, its own name, and its own port. That independence is
+# the point: the two apps boot as two processes and never share a config surface.
+spring:
+  application:
+    # A stable logical name for this service. It shows up in logs today; from Day 19 it becomes the
+    # id this service registers under in Eureka so other services can find it BY NAME instead of by
+    # a hardcoded host:port.
+    name: inventory-service
+
+server:
+  # order-service runs on 8080; inventory-service takes 8081 so both can run on one machine during
+  # local development. In a container/K8s world each gets its own network identity instead.
+  port: 8081
+
+# Actuator: expose just the health endpoint so the service is independently observable. Every
+# service reports its OWN health — a core reason to split (you can see and scale each piece alone).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

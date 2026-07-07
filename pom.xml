@@ -57,6 +57,7 @@
        payment service) is a one-line change here. -->
   <modules>
     <module>order-service</module>
+    <module>inventory-service</module>
   </modules>
 
 </project>

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 17 — the SECOND Spring Boot app in the monorepo: the Inventory service.
+       Its parent is the reactor (../pom.xml), so it inherits Spring Boot's dependency
+       management and the repackage plugin, and stays version-locked with order-service.
+       But it is its OWN deployable: its own main class, its own port (8081), its own
+       dependency set — deliberately LEANER than order-service. Inventory owns one bounded
+       context (what's in stock, and reserving it); it has no need for the order service's
+       Redis cache, rate limiter, Flyway/Postgres or resilience stack, so none of that is on
+       its classpath. Keeping each service's dependencies to exactly what IT needs is a core
+       reason to split: smaller apps, faster starts, independent upgrades. -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>inventory-service</artifactId>
+  <name>OrderHub :: Inventory Service</name>
+  <description>The inventory bounded context — stock levels and reservations, as its own Spring Boot app.</description>
+
+  <dependencies>
+    <!-- REST endpoints (Tomcat + Spring MVC + Jackson). The inventory service exposes its own
+         HTTP API — GET stock, POST a reservation — which order-service will call over the wire
+         from Day 18 (OpenFeign). Today the two apps just run side by side. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Bean Validation so a bad reservation request (missing/negative quantity) fails fast at
+         the HTTP edge with a 400, exactly as order-service does for its requests. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- Actuator — a health endpoint so the service is independently observable and, later,
+         probeable by a container platform. Each microservice reports its OWN health. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable Spring Boot jar — this module ships as its own runnable
+           app, launched independently of order-service. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
