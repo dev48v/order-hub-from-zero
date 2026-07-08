@@ -1,5 +1,7 @@
 package dev.dev48v.orderhub;
 
+import dev.dev48v.orderhub.inventory.InventoryServiceClient;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -22,6 +24,15 @@ import org.testcontainers.utility.DockerImageName;
 // Postgres pattern keeps the tests hermetic (no external services, no local Redis install needed).
 @Testcontainers
 public abstract class AbstractPostgresIT {
+
+    // Day 18 — order-service now reserves stock in inventory-service over HTTP (OpenFeign) when an order
+    // is placed. These full-stack ITs exercise the order flow but must run WITHOUT a real inventory-service
+    // (and without Docker for it). @MockBean replaces the Feign proxy with a Mockito mock for every test
+    // that extends this base, so placeOrder's reservation call is a no-op that returns a null StockView
+    // (the flow tolerates it) instead of hitting the network. The real client's HTTP behaviour is proven
+    // separately in InventoryServiceClientTest against a MockWebServer.
+    @MockBean
+    protected InventoryServiceClient inventoryServiceClient;
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES =
