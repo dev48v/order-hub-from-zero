@@ -31,6 +31,13 @@ logging:
     org.hibernate.SQL: DEBUG
     org.hibernate.orm.jdbc.bind: TRACE
 
+# Day 18 — locally, inventory-service runs alongside order-service on port 8081 (start it with
+# `mvn -pl inventory-service spring-boot:run` from the repo root). Restated here for clarity even though
+# it matches the base default, so the dev story is self-contained: two apps on localhost, talking over HTTP.
+inventory:
+  service:
+    url: http://localhost:8081
+
 # Smaller paging defaults in dev so a single page is easy to read while testing.
 app:
   orders:

@@ -39,6 +39,18 @@
          wires the circuit-breaker state into Actuator health + a Micrometer event stream. The
          aspects only take effect with spring-boot-starter-aop on the classpath. -->
     <resilience4j.version>2.2.0</resilience4j.version>
+    <!-- Day 18: Spring Cloud release train. OpenFeign ships as part of Spring Cloud, versioned by the
+         train rather than pinned per-artifact — so we import the spring-cloud-dependencies BOM below and
+         let it manage spring-cloud-starter-openfeign (and every transitive Spring Cloud module) on one
+         coherent version. 2023.0.x (Leyton) is the train built for Spring Boot 3.3; the .3 patch aligns
+         with the 3.3.x line this project runs on. Bumping Boot later means bumping this train to match. -->
+    <spring-cloud.version>2023.0.3</spring-cloud.version>
+    <!-- Day 18: OkHttp MockWebServer — a throwaway REAL HTTP server for the Feign client test. It lets
+         us prove the declarative @FeignClient interface genuinely turns a Java method call into an HTTP
+         request/response over a socket, WITHOUT booting inventory-service (or needing Docker): the test
+         enqueues canned responses, points inventory.service.url at the server's port, and asserts on the
+         requests Feign actually sent. Pinned explicitly — the Spring Boot parent doesn't manage it. -->
+    <mockwebserver.version>4.12.0</mockwebserver.version>
   </properties>
 
   <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
@@ -50,6 +62,17 @@
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-bom</artifactId>
         <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <!-- Day 18: the Spring Cloud BOM. Importing it here means we can add spring-cloud-starter-openfeign
+           below with NO explicit version — the BOM (pinned by spring-cloud.version) supplies coherent
+           versions for OpenFeign and everything it drags in, kept in lockstep with the Spring Boot 3.3
+           line the parent sets. -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -167,6 +190,20 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!-- Day 18: OpenFeign — the DECLARATIVE HTTP client. Phase 3 split inventory out into its own app
+         (Day 17); today order-service starts calling it OVER THE WIRE instead of via the in-process stub.
+         Rather than hand-writing RestTemplate/WebClient plumbing (build URL, serialise body, execute,
+         check status, deserialise) for every call, we declare a Java INTERFACE whose methods are
+         annotated with the target's REST mapping (@GetMapping/@PostMapping). Spring Cloud OpenFeign
+         generates a proxy that turns each method invocation into the corresponding HTTP request and maps
+         the response back to the return type — so the call site reads like a local method call. Enabled
+         with @EnableFeignClients on the app; each remote API is one @FeignClient interface. Version comes
+         from the spring-cloud-dependencies BOM imported above. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
          ddl-auto with explicit, reviewable schema changes that run identically on
          H2 (local) and PostgreSQL (prod). -->
@@ -227,6 +264,17 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 18: OkHttp MockWebServer — a real, in-process HTTP server for the Feign client test. Feign's
+         default client speaks plain HTTP over a socket, so pointing it at a MockWebServer on localhost
+         exercises the WHOLE client path (URL templating, body encoding, status/JSON decoding) for real,
+         while the test stays hermetic: no inventory-service, no Docker. Test scope only. -->
+    <dependency>
+      <groupId>com.squareup.okhttp3</groupId>
+      <artifactId>mockwebserver</artifactId>
+      <version>${mockwebserver.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

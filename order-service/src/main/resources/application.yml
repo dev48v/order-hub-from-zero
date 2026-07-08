@@ -61,8 +61,30 @@ spring:
       port: 6379
       timeout: 2s
 
+  # Day 18 — OpenFeign client tuning. A synchronous inter-service call MUST be bounded: without a read
+  # timeout, a slow or hung inventory-service would tie up an order-service thread indefinitely. These
+  # per-client timeouts (keyed by the @FeignClient name) cap how long we wait to CONNECT and to READ a
+  # response; overrunning either surfaces as a FeignException, which the order flow turns into a 409. Use
+  # `default` to set a fallback for all clients; the named block below overrides it for inventory-service.
+  cloud:
+    openfeign:
+      client:
+        config:
+          inventory-service:
+            connect-timeout: 2000   # ms to establish the TCP connection before giving up
+            read-timeout: 3000      # ms to wait for the response once connected
+
 server:
   port: 8080
+
+# Day 18 — where inventory-service lives, injected into the @FeignClient's url. This is the interim,
+# pre-service-discovery way to locate a dependency: a plain address in config. The base default points at
+# the local inventory-service (port 8081); the dev profile restates it and the prod profile takes it from
+# ${INVENTORY_SERVICE_URL} so no host is baked into the jar. From Day 19 (Eureka) this disappears —
+# order-service will resolve "inventory-service" by NAME through the registry instead of by URL.
+inventory:
+  service:
+    url: http://localhost:8081
 
 # Day 10: springdoc-openapi / Swagger UI.
 # WHY here in the base file: the paths are part of the API contract and stay the same

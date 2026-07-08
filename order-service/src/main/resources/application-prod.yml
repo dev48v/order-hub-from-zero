@@ -36,6 +36,14 @@ logging:
     root: WARN
     dev.dev48v.orderhub: INFO
 
+# Day 18 — in production the inventory-service address comes ENTIRELY from the environment, never baked
+# into the jar. ${INVENTORY_SERVICE_URL} is supplied by the deploy platform (e.g. an internal service DNS
+# name like http://inventory-service:8081 in a container network); the default only applies if the var is
+# missing, so a mis-provisioned environment fails loudly rather than silently calling the wrong host.
+inventory:
+  service:
+    url: ${INVENTORY_SERVICE_URL:http://inventory-service:8081}
+
 # Larger limits in production — real traffic can request bigger pages and quantities.
 app:
   orders:
