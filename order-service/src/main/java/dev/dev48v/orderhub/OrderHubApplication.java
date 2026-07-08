@@ -6,6 +6,7 @@ import dev.dev48v.orderhub.config.RateLimitProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.openfeign.EnableFeignClients;
 
 // STEP 1 — The entry point.
 // WHY: @SpringBootApplication bundles three annotations — it turns on
@@ -17,7 +18,13 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 // can be injected anywhere, and binds the "app.orders.*" keys onto it at startup.
 // Day 13: RateLimitProperties joins it, binding "app.ratelimit.*" (capacity + refill period).
 // Day 16: IdempotencyProperties joins it too, binding "app.idempotency.*" (header, ttl, lock ttl).
+//
+// Day 18: @EnableFeignClients switches on OpenFeign. It scans this package downward for @FeignClient
+// interfaces (here: InventoryServiceClient) and, for each, registers a proxy bean that implements the
+// interface by making the HTTP calls its method annotations describe. That bean is then injectable like
+// any other — OrderService receives it and calls inventory-service over the wire through it.
 @SpringBootApplication
+@EnableFeignClients
 @EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class, IdempotencyProperties.class})
 public class OrderHubApplication {
     public static void main(String[] args) {
