@@ -2,6 +2,7 @@ package dev.dev48v.orderhub.web;
 
 import dev.dev48v.orderhub.idempotency.IdempotencyInProgressException;
 import dev.dev48v.orderhub.idempotency.IdempotencyKeyReuseException;
+import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.service.OrderNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -93,6 +94,20 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage());
         problem.setTitle("Idempotency-Key reused with a different request");
+        return stamped(problem);
+    }
+
+    // Day 18 — 409 Conflict: placing the order required reserving stock in inventory-service over HTTP,
+    // and that reservation failed (the SKU is unknown, there isn't enough stock, or the service couldn't
+    // be reached). The order can't be honoured, so we refuse it with a clear conflict rather than a 500.
+    // We surface the message but never the underlying FeignException/stack trace — the cause stays in logs.
+    @ExceptionHandler(InventoryReservationException.class)
+    public ProblemDetail handleInventoryReservation(InventoryReservationException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Inventory reservation failed");
+        problem.setProperty("sku", ex.sku());
+        problem.setProperty("quantity", ex.quantity());
         return stamped(problem);
     }
 

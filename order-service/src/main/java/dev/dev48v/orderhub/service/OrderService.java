@@ -4,7 +4,14 @@ import dev.dev48v.orderhub.config.CacheConfig;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.domain.OrderStatus;
+import dev.dev48v.orderhub.inventory.InventoryReservationException;
+import dev.dev48v.orderhub.inventory.InventoryServiceClient;
+import dev.dev48v.orderhub.inventory.ReserveRequest;
+import dev.dev48v.orderhub.inventory.StockView;
 import dev.dev48v.orderhub.repository.OrderRepository;
+import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.cache.annotation.Caching;
@@ -44,12 +51,20 @@ import java.util.UUID;
 @Service
 public class OrderService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
     private final OrderRepository repository;
     private final OrderProperties properties;
+    // Day 18: the OpenFeign proxy for inventory-service. Injected like any bean; behind the interface it
+    // makes a real HTTP call. This is where the two services actually talk over the wire.
+    private final InventoryServiceClient inventory;
 
-    public OrderService(OrderRepository repository, OrderProperties properties) {
+    public OrderService(OrderRepository repository,
+                        OrderProperties properties,
+                        InventoryServiceClient inventory) {
         this.repository = repository;
         this.properties = properties;
+        this.inventory = inventory;
     }
 
     // A brand-new order can't already be in the "order" cache (its id was just minted), so there's
@@ -64,8 +79,32 @@ public class OrderService {
             throw new IllegalArgumentException(
                     "quantity must be at most " + properties.maxQuantity());
         }
+        // Day 18 — the inter-service call. Before we commit the order, reserve the stock in the
+        // inventory-service over HTTP (via the OpenFeign client). We only persist the order once the
+        // reservation succeeds, so we never accept an order we can't fulfil. The order's `item` is used
+        // as the inventory SKU (e.g. "KEYBOARD-001"); a SKU the inventory service doesn't recognise, or
+        // hasn't enough of, fails the reservation and therefore the order.
+        reserveStock(item, quantity);
         Order order = new Order(UUID.randomUUID().toString(), customer, item, quantity);
         return repository.save(order);
+    }
+
+    // Day 18 — the synchronous reservation call to inventory-service, and how we handle its response.
+    // The declarative Feign call reads like a local method invocation; underneath it's a POST to
+    // inventory-service. Any non-2xx (404 unknown SKU, 409 insufficient stock, a 5xx) or a transport
+    // failure (service down / unreachable) is raised by Feign as a FeignException, which we translate
+    // into a domain InventoryReservationException — the web layer turns that into a 409. This is the
+    // coupling of a synchronous call made explicit: order-service cannot proceed if the dependency won't.
+    private void reserveStock(String sku, int quantity) {
+        try {
+            StockView stock = inventory.reserve(sku, new ReserveRequest(quantity));
+            log.info("Reserved {} unit(s) of '{}' in inventory-service; {} remaining",
+                    quantity, sku, stock != null ? stock.available() : "unknown");
+        } catch (FeignException ex) {
+            log.warn("Inventory reservation for '{}' x{} failed (HTTP {}): {}",
+                    sku, quantity, ex.status(), ex.getMessage());
+            throw new InventoryReservationException(sku, quantity, ex);
+        }
     }
 
     // @Cacheable = cache-aside for a single order: check Redis under key "order::<id>" first; on a
