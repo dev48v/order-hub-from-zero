@@ -1,0 +1,47 @@
+# Day 19 — the Eureka service registry's OWN configuration.
+# It has no domain, no database — its whole job is to hold the live list of service instances and
+# hand it out. So the config is almost entirely about running as a single STANDALONE node.
+spring:
+  application:
+    # The registry's own name (shows in the dashboard and logs). It doesn't register itself, but a
+    # stable name keeps logs and any future clustering coherent.
+    name: eureka-server
+
+server:
+  # The conventional Eureka port. Clients point their eureka.client.service-url.defaultZone here
+  # (http://localhost:8761/eureka), so both services know exactly where the registry lives.
+  port: 8761
+
+eureka:
+  client:
+    # A Eureka server is a Eureka client by default — in a CLUSTER, peer nodes register with and
+    # replicate from each other. We run ONE node, so:
+    #   register-with-eureka=false  -> don't try to register this server as an instance of itself.
+    #   fetch-registry=false        -> don't try to pull a registry from a peer; this node IS the source.
+    # Without these, a standalone server logs noisy "cannot reach peer" errors on a loop at startup.
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      # Where this node's own client half would look for peers — pointed back at itself for a
+      # self-contained standalone node.
+      defaultZone: http://localhost:8761/eureka/
+  server:
+    # SELF-PRESERVATION: a safety mode where, if too many heartbeats go missing at once, Eureka
+    # ASSUMES a network partition (not that every service really died) and STOPS evicting instances,
+    # to avoid emptying the registry during a blip. It's right for production but confusing in local
+    # dev — a service you actually stopped lingers in the registry. We disable it here so eviction is
+    # prompt and the dashboard reflects reality while developing. (Day 19 BACKEND explains the tradeoff.)
+    enable-self-preservation: false
+    # How often Eureka sweeps out instances whose lease has expired (default 60s). Shorter here so a
+    # stopped service disappears quickly in dev.
+    eviction-interval-timer-in-ms: 15000
+
+# Expose health so the registry is observable like every other service in the system.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

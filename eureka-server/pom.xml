@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 19 — the THIRD app in the monorepo: the Eureka service REGISTRY.
+       Up to Day 18, order-service found inventory-service through a hardcoded URL in config
+       (inventory.service.url). That address rots the moment inventory-service moves, restarts on a
+       new host, or scales to more than one instance. A registry fixes that: every service instance
+       REGISTERS itself under a logical name and sends a periodic heartbeat; a caller then asks the
+       registry "where is inventory-service?" and gets back the live instances to pick from. The
+       hardcoded host disappears — services are located by NAME, at runtime.
+
+       This module is that registry. It is deliberately tiny — no domain, no database — just Netflix
+       Eureka wrapped in a Spring Boot app. Its parent is the reactor, so it inherits Boot's dependency
+       management, the repackage plugin, and the Spring Cloud BOM promoted to the parent on Day 19. -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>eureka-server</artifactId>
+  <name>OrderHub :: Eureka Server</name>
+  <description>The service registry — where every service registers and discovers its peers by name.</description>
+
+  <dependencies>
+    <!-- The Eureka SERVER starter. It brings the Netflix Eureka server (the registry + its dashboard)
+         and Spring Cloud's auto-config; @EnableEurekaServer on the main class turns this Boot app into
+         a running registry that accepts registrations and serves the instance list back to clients.
+         Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable jar — the registry ships and runs as its own process,
+           started before the services so they have something to register with. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

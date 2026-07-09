@@ -50,12 +50,38 @@
   <properties>
     <!-- Declared once here; every module inherits it, so all services compile on the same Java. -->
     <java.version>21</java.version>
+    <!-- Day 19: the Spring Cloud release train, PROMOTED to the reactor. Until Day 18 only
+         order-service used Spring Cloud (OpenFeign), so it pinned the version and imported the BOM
+         locally. Day 19 adds a Eureka SERVER module and turns BOTH services into Eureka CLIENTS —
+         three modules now depend on Spring Cloud — so the version + BOM belong here, declared once
+         and inherited everywhere, kept in lockstep. 2023.0.x (Leyton) is the train built for Spring
+         Boot 3.3; the .3 patch matches the 3.3.x line the parent above sets. -->
+    <spring-cloud.version>2023.0.3</spring-cloud.version>
   </properties>
+
+  <!-- Day 19: import the Spring Cloud BOM at the reactor level so every child can add a Spring Cloud
+       starter (OpenFeign, the Eureka server, the Eureka client, LoadBalancer) with NO explicit
+       version — the BOM supplies coherent versions for the whole train, aligned with Spring Boot 3.3. -->
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <!-- The services in the monorepo. `mvn` at the root builds them together, in the order the
        reactor computes from any inter-module dependencies. Adding a module later (a gateway, a
-       payment service) is a one-line change here. -->
+       payment service) is a one-line change here.
+       Day 19 adds eureka-server — the service REGISTRY the two services register with and discover
+       each other through. It is infrastructure, not a bounded context, but it ships and builds like
+       any other module in the reactor. -->
   <modules>
+    <module>eureka-server</module>
     <module>order-service</module>
     <module>inventory-service</module>
   </modules>
