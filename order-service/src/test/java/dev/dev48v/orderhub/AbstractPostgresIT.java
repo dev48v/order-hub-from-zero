@@ -1,7 +1,11 @@
 package dev.dev48v.orderhub;
 
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
+import org.junit.jupiter.api.BeforeEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
@@ -34,6 +38,26 @@ public abstract class AbstractPostgresIT {
     @MockBean
     protected InventoryServiceClient inventoryServiceClient;
 
+    // Day 19 — pin the test HTTP client to the JDK's SimpleClientHttpRequestFactory.
+    // WHY: the Eureka client starter (added today) transitively puts Apache HttpClient 5 on the
+    // classpath — spring-cloud-netflix-eureka-client REQUIRES it for its own REST transport, so it
+    // can't be excluded. But Spring Boot AUTO-DETECTS HC5 and, from now on, builds the auto-configured
+    // TestRestTemplate on top of it. HC5 keep-alives + transparently RETRIES a request when a pooled
+    // connection is found stale — which silently breaks RateLimitIT: the throttled 6th POST gets
+    // retried, and by the time the retry runs a token has refilled, so the client sees 201 instead of
+    // the 429 the server actually returned. The order flow uses Feign (never RestTemplate) in
+    // production, so this is purely a test-client concern. Forcing the simple, non-pooling JDK factory
+    // restores the deterministic Day-18 behaviour: one request in, one response out, no hidden retry.
+    @Autowired(required = false)
+    private TestRestTemplate restTemplate;
+
+    @BeforeEach
+    void useNonRetryingHttpClient() {
+        if (restTemplate != null) {
+            restTemplate.getRestTemplate().setRequestFactory(new SimpleClientHttpRequestFactory());
+        }
+    }
+
     @Container
     static final PostgreSQLContainer<?> POSTGRES =
             new PostgreSQLContainer<>("postgres:16-alpine");
@@ -52,5 +76,13 @@ public abstract class AbstractPostgresIT {
         // Point Spring Boot's Redis auto-config at the container's mapped host/port.
         registry.add("spring.data.redis.host", REDIS::getHost);
         registry.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+
+        // Day 19 — the Eureka client is now on the classpath. These full-stack ITs boot the whole app,
+        // which would otherwise try to register with (and fetch a registry from) a Eureka server that
+        // isn't running in the build. Turn discovery OFF for the tests: the inventory call is already a
+        // @MockBean above, so no name ever needs resolving, and this keeps the context fast and quiet
+        // (no background registration/heartbeat threads, no connection-refused log spam).
+        registry.add("eureka.client.enabled", () -> "false");
+        registry.add("spring.cloud.discovery.enabled", () -> "false");
     }
 }

@@ -28,7 +28,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 // and @SpringBootTest wires the genuine JpaOrderRepository -> SpringDataOrderRepository ->
 // Hibernate -> Postgres. So this exercises the same engine prod uses, not the H2 default:
 // Flyway runs V1/V2 on the container, then we save and read orders for real.
-@SpringBootTest
+// Day 19 — this IT boots the FULL app context (to wire the real JPA adapter), which now includes the
+// Eureka client. Disable discovery for the test: this class exercises persistence only and never calls
+// inventory-service, so there's nothing to resolve, and switching Eureka off keeps the boot fast and
+// free of registration/heartbeat noise against a registry that isn't running in the build.
+@SpringBootTest(properties = {
+        "eureka.client.enabled=false",
+        "spring.cloud.discovery.enabled=false"
+})
 @Testcontainers
 class OrderRepositoryIT {
 

@@ -23,6 +23,12 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 // interfaces (here: InventoryServiceClient) and, for each, registers a proxy bean that implements the
 // interface by making the HTTP calls its method annotations describe. That bean is then injectable like
 // any other — OrderService receives it and calls inventory-service over the wire through it.
+//
+// Day 19: no new annotation needed for service discovery. Simply having spring-cloud-starter-netflix-
+// eureka-client on the classpath auto-configures a Eureka client that (a) REGISTERS this app with the
+// registry on startup, and (b) gives Feign a DiscoveryClient so @FeignClient(name = "inventory-service")
+// resolves by NAME + load-balances instead of using a hardcoded URL. (@EnableDiscoveryClient is optional
+// since Spring Cloud auto-enables discovery when a client is present, so we keep the app class unchanged.)
 @SpringBootApplication
 @EnableFeignClients
 @EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class, IdempotencyProperties.class})

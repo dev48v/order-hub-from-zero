@@ -36,13 +36,16 @@ logging:
     root: WARN
     dev.dev48v.orderhub: INFO
 
-# Day 18 — in production the inventory-service address comes ENTIRELY from the environment, never baked
-# into the jar. ${INVENTORY_SERVICE_URL} is supplied by the deploy platform (e.g. an internal service DNS
-# name like http://inventory-service:8081 in a container network); the default only applies if the var is
-# missing, so a mis-provisioned environment fails loudly rather than silently calling the wrong host.
-inventory:
-  service:
-    url: ${INVENTORY_SERVICE_URL:http://inventory-service:8081}
+# Day 19 — in production the inventory-service ADDRESS is no longer configured at all: order-service
+# discovers it by name through the registry. What IS environment-supplied is the registry's own location.
+# ${EUREKA_SERVER_URL} points at the deployed Eureka server (its internal DNS name in the container
+# network); the default only applies if the var is missing, so a mis-provisioned environment fails loudly
+# rather than silently pointing at localhost. Both services registering with the same registry is all it
+# takes for order-service to find inventory-service — however many instances of it are running.
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://eureka-server:8761/eureka/}
 
 # Larger limits in production — real traffic can request bigger pages and quantities.
 app:

@@ -77,14 +77,22 @@ spring:
 server:
   port: 8080
 
-# Day 18 — where inventory-service lives, injected into the @FeignClient's url. This is the interim,
-# pre-service-discovery way to locate a dependency: a plain address in config. The base default points at
-# the local inventory-service (port 8081); the dev profile restates it and the prod profile takes it from
-# ${INVENTORY_SERVICE_URL} so no host is baked into the jar. From Day 19 (Eureka) this disappears —
-# order-service will resolve "inventory-service" by NAME through the registry instead of by URL.
-inventory:
-  service:
-    url: http://localhost:8081
+# Day 19 — service discovery replaces the hardcoded inventory-service URL.
+# On Day 18 this file carried `inventory.service.url: http://localhost:8081`, and the @FeignClient
+# read it. That's gone: order-service now resolves "inventory-service" by NAME through the Eureka
+# registry (@FeignClient(name = "inventory-service"), url dropped). The block below registers
+# order-service itself and tells its Eureka client where the registry lives; the DiscoveryClient it
+# provides is what Feign + Spring Cloud LoadBalancer use to turn the name into a live address per call.
+# (The only place inventory.service.url still appears is the client TEST, which sets it to point Feign
+# at a MockWebServer and bypass discovery — see InventoryServiceClientTest.)
+eureka:
+  client:
+    service-url:
+      # The registry's address. The prod profile overrides this from the environment; dev keeps localhost.
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 
 # Day 10: springdoc-openapi / Swagger UI.
 # WHY here in the base file: the paths are part of the API contract and stay the same

@@ -39,12 +39,10 @@
          wires the circuit-breaker state into Actuator health + a Micrometer event stream. The
          aspects only take effect with spring-boot-starter-aop on the classpath. -->
     <resilience4j.version>2.2.0</resilience4j.version>
-    <!-- Day 18: Spring Cloud release train. OpenFeign ships as part of Spring Cloud, versioned by the
-         train rather than pinned per-artifact — so we import the spring-cloud-dependencies BOM below and
-         let it manage spring-cloud-starter-openfeign (and every transitive Spring Cloud module) on one
-         coherent version. 2023.0.x (Leyton) is the train built for Spring Boot 3.3; the .3 patch aligns
-         with the 3.3.x line this project runs on. Bumping Boot later means bumping this train to match. -->
-    <spring-cloud.version>2023.0.3</spring-cloud.version>
+    <!-- Day 18 → 19: the Spring Cloud release train (which versions OpenFeign, the Eureka client and
+         LoadBalancer) MOVED to the reactor parent on Day 19, now that three modules use Spring Cloud.
+         The property + BOM import live once in ../pom.xml and are inherited here — so the starters below
+         still need no explicit version. -->
     <!-- Day 18: OkHttp MockWebServer — a throwaway REAL HTTP server for the Feign client test. It lets
          us prove the declarative @FeignClient interface genuinely turns a Java method call into an HTTP
          request/response over a socket, WITHOUT booting inventory-service (or needing Docker): the test
@@ -55,24 +53,15 @@
 
   <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
        Declared here (ahead of the Spring Boot parent's dependency management) so testcontainers.version
-       above wins. -->
+       above wins.
+       Day 19: the Spring Cloud BOM that used to live here was promoted to the reactor parent (three
+       modules now use Spring Cloud), so only the Testcontainers BOM remains module-local. -->
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-bom</artifactId>
         <version>${testcontainers.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
-      <!-- Day 18: the Spring Cloud BOM. Importing it here means we can add spring-cloud-starter-openfeign
-           below with NO explicit version — the BOM (pinned by spring-cloud.version) supplies coherent
-           versions for OpenFeign and everything it drags in, kept in lockstep with the Spring Boot 3.3
-           line the parent sets. -->
-      <dependency>
-        <groupId>org.springframework.cloud</groupId>
-        <artifactId>spring-cloud-dependencies</artifactId>
-        <version>${spring-cloud.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -202,6 +191,26 @@
     <dependency>
       <groupId>org.springframework.cloud</groupId>
       <artifactId>spring-cloud-starter-openfeign</artifactId>
+    </dependency>
+
+    <!-- Day 19 — the Eureka CLIENT starter. Two jobs for order-service: (1) it REGISTERS order-service
+         itself in the registry (a future API gateway will discover it the same way), and (2) it gives
+         Feign a DiscoveryClient so @FeignClient(name = "inventory-service") can be resolved to live
+         instances by NAME instead of the hardcoded inventory.service.url we used on Day 18. This starter
+         also pulls in spring-cloud-loadbalancer transitively (declared explicitly below for clarity). -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- Day 19 — Spring Cloud LoadBalancer. When Feign resolves a name to SEVERAL instances (scale
+         inventory-service to 2+), this is what picks one per call — a client-side, round-robin load
+         balancer that lives in the CALLER. There is no separate proxy box: order-service asks the
+         registry for the instance list and balances across it itself. Pulled in transitively by the
+         Eureka client starter above, but declared explicitly so the dependency is visible and stable. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-loadbalancer</artifactId>
     </dependency>
 
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's

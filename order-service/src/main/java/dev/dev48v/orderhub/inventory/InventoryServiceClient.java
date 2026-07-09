@@ -18,17 +18,24 @@ import org.springframework.web.bind.annotation.RequestBody;
 // serialised to JSON and the JSON response bound back onto StockView. The call site reads like a local
 // method call; the network hop is hidden behind the interface.
 //
-//   • name — a logical id for this client (shows up in logs/metrics). From Day 19 (Eureka) this same
-//     name becomes the SERVICE ID Feign resolves through discovery + load-balancing, and the hardcoded
-//     url below disappears. Today there is no registry, so we must tell Feign WHERE the service is.
-//   • url  — the absolute base URL, taken from the `inventory.service.url` property with a localhost:8081
-//     default (inventory-service's port). Externalised so dev/prod point it at different hosts with no
-//     recompile — the interim, pre-service-discovery way to locate a dependency.
+// Day 19 — NAME-BASED DISCOVERY. The `name` is now the SERVICE ID Feign resolves through the Eureka
+// registry: Feign asks the DiscoveryClient "which instances are registered under 'inventory-service'?"
+// and Spring Cloud LoadBalancer picks one per call. So order-service no longer needs to know WHERE
+// inventory-service is — only its NAME. When inventory-service moves, restarts on a new host, or scales
+// to several instances, nothing here changes; the registry tracks the live addresses.
+//
+//   • name — the logical SERVICE ID. It must match inventory-service's spring.application.name. This is
+//     the only thing the caller needs; the address comes from the registry at call time.
+//   • url  — DROPPED for normal operation. We keep `${inventory.service.url:}` with an EMPTY default: when
+//     the property is absent (dev/prod) the empty url means "no absolute url" → Feign uses discovery +
+//     load-balancing by name. The escape hatch is for TESTS ONLY — InventoryServiceClientTest SETS this
+//     property to point the client straight at an OkHttp MockWebServer, so it can exercise the real HTTP
+//     path without a registry. A non-empty url short-circuits discovery; an empty one enables it.
 //
 // Error behaviour: any non-2xx response (404 unknown SKU, 409 insufficient stock, 5xx, or a connect
 // failure) surfaces as a feign.FeignException from the called method — Feign's default ErrorDecoder. The
 // order flow catches it and translates it into a domain-level failure (see OrderService.reserveStock).
-@FeignClient(name = "inventory-service", url = "${inventory.service.url:http://localhost:8081}")
+@FeignClient(name = "inventory-service", url = "${inventory.service.url:}")
 public interface InventoryServiceClient {
 
     // GET the current stock for one SKU. Mirrors InventoryController.getOne(sku) on inventory-service.
