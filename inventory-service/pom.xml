@@ -47,6 +47,17 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!-- Day 19 — the Eureka CLIENT starter. This makes inventory-service REGISTER itself with the
+         Eureka server on startup (under spring.application.name = "inventory-service") and send a
+         periodic heartbeat to keep its lease alive. That's how order-service can stop hardcoding this
+         service's URL and instead resolve it by name through the registry. The client also brings
+         spring-cloud-loadbalancer transitively, but inventory-service only PUBLISHES itself here; it
+         doesn't call anyone. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>

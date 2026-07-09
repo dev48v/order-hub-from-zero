@@ -3,15 +3,34 @@
 # the point: the two apps boot as two processes and never share a config surface.
 spring:
   application:
-    # A stable logical name for this service. It shows up in logs today; from Day 19 it becomes the
-    # id this service registers under in Eureka so other services can find it BY NAME instead of by
-    # a hardcoded host:port.
+    # Day 19 — this is now the SERVICE ID under which inventory-service registers in Eureka. It's the
+    # exact name order-service resolves against: @FeignClient(name = "inventory-service"). The logical
+    # name replaces the hardcoded host:port entirely — callers ask the registry for "inventory-service"
+    # and get back whichever instances are live right now.
     name: inventory-service
 
 server:
   # order-service runs on 8080; inventory-service takes 8081 so both can run on one machine during
   # local development. In a container/K8s world each gets its own network identity instead.
   port: 8081
+
+# Day 19 — register with the Eureka service registry.
+# On startup the Eureka client POSTs this instance (its host + port + the app name above) to the
+# server, then sends a heartbeat every ~30s to keep the lease alive. If the heartbeats stop (crash,
+# kill), the lease expires and the server evicts the instance, so callers stop being handed a dead
+# address. This is what lets order-service drop the hardcoded inventory.service.url and resolve us by
+# NAME instead.
+eureka:
+  client:
+    service-url:
+      # Where the registry lives. Both services point here so they share one registry.
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    # Register by IP rather than hostname — more robust across dev machines / containers where
+    # hostname resolution is unreliable. The instance id keeps the app name + port readable in the
+    # dashboard even when several instances of this service run behind the one name.
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
 
 # Actuator: expose just the health endpoint so the service is independently observable. Every
 # service reports its OWN health — a core reason to split (you can see and scale each piece alone).
