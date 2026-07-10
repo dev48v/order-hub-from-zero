@@ -10,8 +10,9 @@ spring:
     name: inventory-service
 
 server:
-  # order-service runs on 8080; inventory-service takes 8081 so both can run on one machine during
-  # local development. In a container/K8s world each gets its own network identity instead.
+  # Each service takes its own local port so they can all run on one machine: the api-gateway (the
+  # public front door) owns 8080, inventory-service takes 8081, order-service sits on 8082. In a
+  # container/K8s world each gets its own network identity instead.
   port: 8081
 
 # Day 19 — register with the Eureka service registry.

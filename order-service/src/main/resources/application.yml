@@ -1,6 +1,11 @@
 spring:
   application:
-    name: order-hub
+    # Day 20 — the order service's Eureka SERVICE ID. Renamed from "order-hub" to "order-service" so its
+    # registered name matches its module name and the convention of its peers (inventory-service,
+    # api-gateway, eureka-server). This is the exact name the API gateway addresses in its route table:
+    # `uri: lb://order-service`. "OrderHub" stays the name of the whole product; the service itself is
+    # order-service. Nothing resolves this service by its old name, so the rename is self-contained.
+    name: order-service
 
   # Day 7: profiles. This base file holds the settings shared by every environment; the
   # environment-specific overrides live in application-dev.yml and application-prod.yml.
@@ -75,7 +80,10 @@ spring:
             read-timeout: 3000      # ms to wait for the response once connected
 
 server:
-  port: 8080
+  # Day 20 — moved off 8080. That port is now owned by the api-gateway, the single public front door;
+  # order-service sits BEHIND it on 8082 (inventory-service is on 8081). Clients no longer hit this port
+  # directly — they go through the gateway, which discovers this service by name and forwards to it.
+  port: 8082
 
 # Day 19 — service discovery replaces the hardcoded inventory-service URL.
 # On Day 18 this file carried `inventory.service.url: http://localhost:8081`, and the @FeignClient
