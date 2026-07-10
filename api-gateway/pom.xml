@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 20 — the FOURTH app in the monorepo: the API GATEWAY, the single front door.
+       Until now a client had to know the address of every service: orders on one port, inventory on
+       another. That leaks the internal topology to the outside world, forces the browser to juggle N
+       base URLs (and N sets of CORS), and leaves cross-cutting concerns — auth, rate limiting, logging,
+       CORS — to be re-implemented in every service. A gateway collapses all of that into ONE entry
+       point: the client talks only to the gateway, and the gateway forwards each request to the right
+       service based on the URL path, resolving the target BY NAME through the Eureka registry.
+
+       Its parent is the reactor, so it inherits Spring Boot's dependency management and the Spring
+       Cloud BOM promoted to the parent on Day 19 — every Spring Cloud starter below needs no version. -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>api-gateway</artifactId>
+  <name>OrderHub :: API Gateway</name>
+  <description>The single front door — routes /api/** to services by name via Eureka, and owns edge concerns (CORS, correlation IDs).</description>
+
+  <dependencies>
+    <!-- Spring Cloud Gateway — the REACTIVE gateway, built on Spring WebFlux + Netty (NOT servlet
+         Tomcat). Reactive matters here: a gateway spends almost all its time waiting on the network
+         (accept a request, wait for a downstream service, stream the response back), so a small,
+         non-blocking event loop handles thousands of concurrent in-flight requests without a thread
+         parked per connection. This starter pulls in WebFlux/Netty transitively; do NOT also add
+         spring-boot-starter-web (servlet), or the two web stacks collide and the app fails to start. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-gateway</artifactId>
+    </dependency>
+
+    <!-- Eureka CLIENT — the gateway is itself a discovery client. It registers under
+         spring.application.name = "api-gateway" AND, crucially, reads the registry so it can turn the
+         logical names in its route table (lb://order-service, lb://inventory-service) into live
+         instance addresses at request time. No service host:port is ever hardcoded in the gateway. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- Spring Cloud LoadBalancer — the piece that makes the lb:// scheme work. When a route's uri is
+         lb://order-service, the gateway's ReactiveLoadBalancerClientFilter asks the load balancer for
+         an instance of "order-service"; the load balancer pulls the live list from the Eureka client
+         above and picks one (round-robin by default). So "route by name" is really "discover the
+         instances, then balance across them" — client-side load balancing, no separate LB appliance.
+         (The eureka-client starter brings this transitively; we declare it explicitly because it is
+         central to how routing resolves, not an incidental transitive.) -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-loadbalancer</artifactId>
+    </dependency>
+
+    <!-- Actuator — a health endpoint (parity with every other service) plus the read-only `gateway`
+         actuator endpoint, which lets you list the live routes at runtime for debugging. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable Spring Boot jar — the gateway ships and runs as its own
+           process on port 8080, the one port the outside world (and the React UI) talks to. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

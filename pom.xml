@@ -79,9 +79,14 @@
        payment service) is a one-line change here.
        Day 19 adds eureka-server — the service REGISTRY the two services register with and discover
        each other through. It is infrastructure, not a bounded context, but it ships and builds like
-       any other module in the reactor. -->
+       any other module in the reactor.
+       Day 20 adds api-gateway — the single front door. Like the registry it's infrastructure, not a
+       bounded context: it owns no domain, it just routes the outside world's /api/** traffic to the
+       right service by name via Eureka and applies edge concerns (CORS, correlation IDs). Four modules
+       now build under one reactor. -->
   <modules>
     <module>eureka-server</module>
+    <module>api-gateway</module>
     <module>order-service</module>
     <module>inventory-service</module>
   </modules>

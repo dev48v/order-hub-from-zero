@@ -1,0 +1,91 @@
+# Day 20 — the API GATEWAY's configuration. This file IS the gateway: its behaviour is the route
+# table below, not Java code. The client talks only to this app (port 8080); it forwards each request
+# to the right service, discovered BY NAME through Eureka.
+spring:
+  application:
+    # The gateway registers under this name in Eureka, like every other service.
+    name: api-gateway
+
+  cloud:
+    gateway:
+      # ---- THE ROUTE TABLE ----------------------------------------------------------------------
+      # Each route is: a PREDICATE (does this request match?) -> a URI (where to send it) + FILTERS
+      # (how to transform it on the way). The gateway evaluates routes top to bottom and forwards the
+      # request to the first match. These two routes are the entire public surface of the system.
+      routes:
+        # /api/orders/**  ->  the order service, resolved by name through the registry.
+        - id: order-service
+          # lb:// = "load-balanced by discovery". The gateway does NOT hold order-service's address;
+          # at request time it asks Spring Cloud LoadBalancer for a live instance of "order-service"
+          # (the order service's spring.application.name / Eureka service id) and forwards there. Add
+          # or kill instances and the gateway follows the registry automatically — nothing to edit here.
+          uri: lb://order-service
+          predicates:
+            # Path predicate: match every request whose path starts with /api/orders/. ** is a
+            # multi-segment wildcard, so /api/orders, /api/orders/{id} and /api/orders/{id}/confirm
+            # all match this one route.
+            - Path=/api/orders/**
+          filters:
+            # A per-route PRE filter: stamp a header so the downstream service (and its logs) can see
+            # the request arrived through the edge rather than being hit directly. NOTE: we deliberately
+            # do NOT StripPrefix here — order-service already serves its API under /api/orders/**, so the
+            # incoming path matches the downstream mapping as-is. (StripPrefix=1 would turn /api/orders
+            # into /orders and 404.)
+            - AddRequestHeader=X-Gateway, order-hub-edge
+
+        # /api/inventory/**  ->  the inventory service, same discovery-driven pattern.
+        - id: inventory-service
+          uri: lb://inventory-service
+          predicates:
+            - Path=/api/inventory/**
+          filters:
+            - AddRequestHeader=X-Gateway, order-hub-edge
+
+      # ---- CORS AT THE EDGE ---------------------------------------------------------------------
+      # With one front door, the browser's cross-origin policy is configured ONCE, here — not copied
+      # into every service. The React UI (Vite dev server on :5173, and the Vercel deploy) is allowed
+      # to call the gateway; the services behind it never need their own CORS config.
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "https://order-hub-ui.vercel.app"
+            allowedMethods:
+              - GET
+              - POST
+              - PATCH
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+server:
+  # THE single public port. order-service used to own 8080; now the gateway does, and order-service
+  # has moved behind it to 8082 (inventory-service stays on 8081). The outside world only ever sees 8080.
+  port: 8080
+
+# Day 20 — the gateway is a Eureka CLIENT. It registers itself AND reads the registry so the lb://
+# routes above resolve to live instances. Same registry the two services use, so it sees exactly what
+# they publish.
+eureka:
+  client:
+    service-url:
+      # Where the registry lives. The prod profile overrides this from the environment; dev keeps localhost.
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+# Actuator: expose health (parity with every service) plus the read-only `gateway` endpoint, which
+# lists the live routes at runtime (GET /actuator/gateway/routes) — handy for confirming the table.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, gateway
+  endpoint:
+    health:
+      show-details: always

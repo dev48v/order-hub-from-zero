@@ -1,0 +1,15 @@
+# Day 20 — PROD profile for the gateway. Same shape as the services' prod profiles: nothing that
+# differs at runtime lives in the jar. In production the registry's address is environment-supplied
+# (its internal DNS name in the container network), not localhost.
+eureka:
+  client:
+    service-url:
+      # ${EUREKA_SERVER_URL} points at the deployed Eureka server; the default only applies if the var
+      # is missing, so a mis-provisioned environment fails loudly rather than silently using localhost.
+      defaultZone: ${EUREKA_SERVER_URL:http://eureka-server:8761/eureka/}
+
+# Quiet, lean logging in production.
+logging:
+  level:
+    root: WARN
+    dev.dev48v.gateway: INFO
