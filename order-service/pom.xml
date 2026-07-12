@@ -213,6 +213,19 @@
       <artifactId>spring-cloud-starter-loadbalancer</artifactId>
     </dependency>
 
+    <!-- Day 21 — the Config CLIENT starter. It makes order-service a client of the Spring Cloud
+         Config Server: at startup (driven by spring.config.import=configserver:… in application.yml)
+         it fetches its configuration — the shared application.yml plus its own order-service.yml —
+         from http://localhost:8888 and folds those properties into the Environment, BEFORE the app's
+         beans are created. That's how the Eureka URL and org-wide props can live in ONE place instead
+         of being copy-pasted into this service's local config. The import is marked `optional:`, so if
+         the config server isn't running (tests, offline) the app still boots on its local defaults.
+         Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
+
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
          ddl-auto with explicit, reviewable schema changes that run identically on
          H2 (local) and PostgreSQL (prod). -->

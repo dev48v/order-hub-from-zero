@@ -7,6 +7,17 @@ spring:
     # order-service. Nothing resolves this service by its old name, so the rename is self-contained.
     name: order-service
 
+  # Day 21 — become a CONFIG CLIENT. At startup, fetch this service's configuration from the Spring
+  # Cloud Config Server (port 8888) using the service name above: the server returns the shared
+  # application.yml merged with order-service.yml, and those properties join this Environment BEFORE
+  # the beans are created. That's how shared settings (the Eureka URL, org-wide props) live in ONE
+  # place instead of being copy-pasted here. `optional:` is the safety net: if the config server isn't
+  # running (tests, offline, a cold start before the server is up) the import is skipped silently and
+  # the service boots on the local defaults below — so nothing here becomes a hard dependency on the
+  # server being reachable.
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
   # Day 7: profiles. This base file holds the settings shared by every environment; the
   # environment-specific overrides live in application-dev.yml and application-prod.yml.
   # We deliberately do NOT hardcode an active profile here — pick one at runtime via the
@@ -94,10 +105,12 @@ server:
 # (The only place inventory.service.url still appears is the client TEST, which sets it to point Feign
 # at a MockWebServer and bypass discovery — see InventoryServiceClientTest.)
 eureka:
-  client:
-    service-url:
-      # The registry's address. The prod profile overrides this from the environment; dev keeps localhost.
-      defaultZone: http://localhost:8761/eureka/
+  # Day 21 — the registry address (eureka.client.service-url.defaultZone) is no longer HERE. It moved
+  # to the config server's SHARED application.yml and is fetched at startup via spring.config.import
+  # above — one shared line, one place, instead of the same URL copy-pasted into every service. (The
+  # prod profile keeps a ${EUREKA_SERVER_URL} override for the deployed environment.) If the config
+  # server is unreachable, Eureka's own built-in default — http://localhost:8761/eureka/ — applies, so
+  # local/offline boot is byte-for-byte unchanged.
   instance:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${server.port}

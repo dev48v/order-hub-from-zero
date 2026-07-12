@@ -9,6 +9,15 @@ spring:
     # and get back whichever instances are live right now.
     name: inventory-service
 
+  # Day 21 — become a CONFIG CLIENT. At startup, fetch this service's configuration from the Spring
+  # Cloud Config Server (port 8888) using the service name above: the server returns the shared
+  # application.yml merged with inventory-service.yml, and those properties join this Environment
+  # BEFORE the beans are created — so shared settings (the Eureka URL, org-wide props) live in ONE
+  # place instead of being copy-pasted here. `optional:` is the safety net: if the config server isn't
+  # running (tests, offline) the import is skipped silently and the service boots on its local defaults.
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
 server:
   # Each service takes its own local port so they can all run on one machine: the api-gateway (the
   # public front door) owns 8080, inventory-service takes 8081, order-service sits on 8082. In a
@@ -22,10 +31,11 @@ server:
 # address. This is what lets order-service drop the hardcoded inventory.service.url and resolve us by
 # NAME instead.
 eureka:
-  client:
-    service-url:
-      # Where the registry lives. Both services point here so they share one registry.
-      defaultZone: http://localhost:8761/eureka/
+  # Day 21 — the registry address (eureka.client.service-url.defaultZone) is no longer HERE. It moved
+  # to the config server's SHARED application.yml and is fetched at startup via spring.config.import
+  # above — one shared line for the whole system instead of the same URL duplicated in every service.
+  # If the config server is unreachable, Eureka's built-in default (http://localhost:8761/eureka/)
+  # applies, so local/offline boot is unchanged.
   instance:
     # Register by IP rather than hostname — more robust across dev machines / containers where
     # hostname resolution is unreliable. The instance id keeps the app name + port readable in the

@@ -58,6 +58,19 @@
       <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
     </dependency>
 
+    <!-- Day 21 — the Config CLIENT starter. It makes inventory-service a client of the Spring Cloud
+         Config Server: at startup (driven by spring.config.import=configserver:… in application.yml)
+         it fetches its configuration — the shared application.yml plus its own inventory-service.yml —
+         from http://localhost:8888 and folds those properties into the Environment before any beans
+         are created. So the shared Eureka URL and org-wide props live in ONE place, not copy-pasted
+         here. The import is marked `optional:`, so if the config server isn't running (tests, offline)
+         the service still boots on its local defaults. Version comes from the Spring Cloud BOM the
+         reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
