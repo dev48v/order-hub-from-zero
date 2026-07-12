@@ -1,0 +1,13 @@
+# Day 21 — config specific to INVENTORY-SERVICE, served by the config server.
+# Merged ON TOP of the shared application.yml when inventory-service asks for its config
+# (GET /inventory-service/default). Overrides the shared layer for inventory-service only.
+orderhub:
+  platform:
+    # Overrides the shared default so inventory-service reports THIS as its config-source.
+    config-source: "config-server → inventory-service.yml"
+
+# A service-specific, centrally-tunable value with no local default in inventory-service — its
+# presence at runtime proves it was fetched from the config server.
+inventory:
+  # A centrally-owned low-stock threshold the inventory context can read; tune it once, here.
+  low-stock-threshold: 5

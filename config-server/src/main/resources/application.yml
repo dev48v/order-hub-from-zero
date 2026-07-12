@@ -1,0 +1,40 @@
+# Day 21 — the Config Server's OWN configuration (how the server itself runs). This is deliberately
+# separate from the config it SERVES to others (that lives under classpath:/config, see config/).
+spring:
+  application:
+    # The server's own name — shows in logs and, if it ever registers, in the Eureka dashboard.
+    name: config-server
+
+  # The BACKEND selector. `native` tells Spring Cloud Config Server to serve config from a plain
+  # filesystem/classpath location instead of cloning a git repo — the simplest, fully-reproducible
+  # backend for this series (no external remote required). In production you'd switch this to the
+  # default `git` backend (versioned, audited, rollback-able) or Vault (for secrets) — same server,
+  # just a different profile. Setting the active profile here keeps the demo one-command-runnable.
+  profiles:
+    active: native
+
+  cloud:
+    config:
+      server:
+        native:
+          # WHERE the served config files live. classpath:/config resolves to the config/ folder
+          # packaged inside this module's jar (src/main/resources/config), so the whole config repo
+          # ships with the server and the demo needs nothing on the host filesystem. A real native
+          # setup would point at an external directory (e.g. file:./config-repo) so ops can edit
+          # config without rebuilding; classpath keeps THIS reproducible.
+          search-locations: classpath:/config
+
+server:
+  # The conventional Spring Cloud Config Server port. Clients point their spring.config.import at
+  # http://localhost:8888 (see order-service / inventory-service), so both know where to fetch config.
+  port: 8888
+
+# Expose health so the config server is observable like every other service in the system.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

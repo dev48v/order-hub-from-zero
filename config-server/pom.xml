@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 21 — the FIFTH app in the monorepo: the CONFIG SERVER, the single source of truth for
+       configuration. Until now every service carried its OWN application.yml, and shared settings
+       (the Eureka registry URL, org-wide props) were COPY-PASTED into each one. That sprawls: change
+       a shared value and you must edit N files, rebuild N jars, redeploy N services — and they drift.
+       A config server fixes that: configuration is EXTERNALISED out of the jars into one place, and
+       every service FETCHES its config from the server at startup. One edit, one source of truth.
+
+       This module is that server. It is deliberately tiny — no domain, no database — just Spring
+       Cloud Config Server wrapped in a Spring Boot app, backed by a NATIVE (filesystem/classpath)
+       config repo under src/main/resources/config so the whole thing is reproducible with no external
+       git remote. Its parent is the reactor, so it inherits Boot's dependency management, the repackage
+       plugin, and the Spring Cloud BOM promoted to the parent on Day 19 (which versions the config
+       server + client starters — no explicit version needed below). -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>config-server</artifactId>
+  <name>OrderHub :: Config Server</name>
+  <description>The centralized configuration server — one source of truth every service fetches its config from at startup.</description>
+
+  <dependencies>
+    <!-- The Config SERVER starter. It brings Spring Cloud Config Server and its auto-config;
+         @EnableConfigServer on the main class turns this Boot app into a running config server that
+         serves each service's configuration over HTTP at /{application}/{profile}[/{label}]. The
+         backend (where the config actually lives) is selected by profile — we run the `native` profile
+         so it reads plain yml files from a search location (classpath:/config) instead of cloning a git
+         repo. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-config-server</artifactId>
+    </dependency>
+
+    <!-- Actuator — a health endpoint so the config server is observable like every other service in
+         the system, and (with the config endpoints) handy for confirming what it will serve. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable jar — the config server ships and runs as its own process,
+           started FIRST (before the services) so they have somewhere to fetch their config from. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

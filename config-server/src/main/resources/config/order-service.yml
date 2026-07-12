@@ -1,0 +1,15 @@
+# Day 21 — config specific to ORDER-SERVICE, served by the config server.
+# The config server merges this ON TOP of the shared application.yml when order-service asks for its
+# config (GET /order-service/default). Anything here overrides the shared layer for order-service only.
+orderhub:
+  platform:
+    # Overrides the shared default — order-service will report THIS as its config-source, proving the
+    # per-service layer wins over the shared one.
+    config-source: "config-server → order-service.yml"
+
+# A service-specific, centrally-tunable value. It has NO local default in order-service's own
+# application.yml, so its presence at runtime is proof the value was fetched from the config server.
+app:
+  orders:
+    # A human-facing banner the orders API can surface — tune it centrally, no order-service redeploy.
+    greeting: "OrderHub Orders API — configuration served centrally by Spring Cloud Config"

@@ -82,9 +82,13 @@
        any other module in the reactor.
        Day 20 adds api-gateway — the single front door. Like the registry it's infrastructure, not a
        bounded context: it owns no domain, it just routes the outside world's /api/** traffic to the
-       right service by name via Eureka and applies edge concerns (CORS, correlation IDs). Four modules
-       now build under one reactor. -->
+       right service by name via Eureka and applies edge concerns (CORS, correlation IDs).
+       Day 21 adds config-server — the single source of truth for CONFIGURATION. Also infrastructure:
+       it owns no domain, it just serves each service's externalized config from one place so shared
+       settings live once instead of copy-pasted into every service. Five modules now build under one
+       reactor. -->
   <modules>
+    <module>config-server</module>
     <module>eureka-server</module>
     <module>api-gateway</module>
     <module>order-service</module>

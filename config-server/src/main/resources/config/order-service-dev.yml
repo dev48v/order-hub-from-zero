@@ -1,0 +1,12 @@
+# Day 21 — the PROFILE layer for order-service, served by the config server.
+# When order-service runs with the `dev` profile active it asks for /order-service/dev, and the config
+# server layers THIS file on top of order-service.yml, which is on top of the shared application.yml:
+#
+#   application.yml (shared)  →  order-service.yml  →  order-service-dev.yml   (highest wins)
+#
+# So the same key defined at several layers resolves to the most specific one — exactly how local
+# application-{profile}.yml works, but now centralized. This file exists to make that layering
+# concrete: a dev-only override of the shared/base config-source, chosen only when dev is active.
+orderhub:
+  platform:
+    config-source: "config-server → order-service-dev.yml (dev profile)"

@@ -1,0 +1,29 @@
+# Day 21 — SHARED config, served to EVERY OrderHub service.
+# This is the base layer of the config hierarchy: the config server merges this file UNDER every
+# service's own file, so a value here applies to all services unless one overrides it. It is the
+# single home for settings that used to be COPY-PASTED into each service's local application.yml.
+#
+# ── Layering (lowest → highest precedence) ─────────────────────────────────────────────
+#   application.yml (this file, shared)  →  {service}.yml  →  {service}-{profile}.yml
+# ───────────────────────────────────────────────────────────────────────────────────────
+
+# The Eureka registry address — the textbook shared setting. Until Day 21 this exact line was
+# duplicated in order-service/application.yml AND inventory-service/application.yml (and the gateway).
+# Now it lives HERE, once. Every config client fetches it at startup, so moving the registry means
+# editing ONE line instead of chasing it through every service. (Each service keeps a prod-profile
+# ${EUREKA_SERVER_URL} override locally for the deployed environment; this is the shared dev default.)
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+# A genuinely shared, org-wide block — defined ONCE, visible to every service (browse it on any
+# service at /actuator/env once it has fetched from the config server). Change it here and every
+# service picks it up on its next startup / refresh — no per-service edit, no drift.
+orderhub:
+  platform:
+    name: OrderHub
+    support-email: support@orderhub.dev
+    # Proves WHERE a value came from: this string is overridden per-service below, so each service
+    # can show which layer of the hierarchy won.
+    config-source: "config-server → application.yml (shared)"
