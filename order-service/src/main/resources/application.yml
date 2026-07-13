@@ -90,6 +90,33 @@ spring:
             connect-timeout: 2000   # ms to establish the TCP connection before giving up
             read-timeout: 3000      # ms to wait for the response once connected
 
+    # Day 22 — Spring Cloud LoadBalancer tuning. The strategy itself (round-robin vs random) and the custom
+    # instance-list supplier are wired in code (InventoryLoadBalancerConfig, bound to the inventory-service
+    # client via @LoadBalancerClient); these are the runtime knobs for the health-check + caching pipeline.
+    loadbalancer:
+      # Health-check-based filtering: how the balancer decides an instance is still alive. Defaults probe
+      # every 25s — we tighten it so a killed instance drops out of rotation quickly and the demo rebalances
+      # fast. The `path.default` is the Actuator health endpoint every service already exposes.
+      health-check:
+        initial-delay: 0s
+        interval: 5s
+        path:
+          default: /actuator/health
+      # How long the resolved (discovered + health-checked) instance list is cached before it's refreshed,
+      # so we don't re-hit discovery on every request. Short TTL keeps scale-up/scale-down visible quickly.
+      cache:
+        ttl: 5s
+        capacity: 64
+      # PER-SERVICE override block: settings under clients.<serviceId> apply only to that load-balanced client.
+      # Here it documents that inventory-service uses these health-check settings explicitly; other clients
+      # (were there any) would fall back to the defaults above. This is the per-service config the day calls for.
+      clients:
+        inventory-service:
+          health-check:
+            interval: 5s
+            path:
+              default: /actuator/health
+
 server:
   # Day 20 — moved off 8080. That port is now owned by the api-gateway, the single public front door;
   # order-service sits BEHIND it on 8082 (inventory-service is on 8081). Clients no longer hit this port
@@ -164,6 +191,14 @@ app:
     header-name: Idempotency-Key
     ttl: 24h
     lock-ttl: 5m
+
+# Day 22 — which client-side load-balancing STRATEGY the inventory-service client uses. Read by
+# InventoryLoadBalancerConfig at startup: "round-robin" (default — fair, even rotation) or "random"
+# (uniformly random pick). Flip it here (or via ORDERHUB_LOADBALANCER_STRATEGY) and restart to switch the
+# balancer, no recompile. Not tied to a profile — it's the same in dev and prod unless overridden.
+orderhub:
+  loadbalancer:
+    strategy: round-robin
 
 # Day 14: Resilience4j circuit breaker for the "inventory" downstream (InventoryClient.checkStock,
 # annotated @CircuitBreaker(name = "inventory")). The breaker watches recent call outcomes and, once

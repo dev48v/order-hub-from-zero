@@ -1,11 +1,13 @@
 package dev.dev48v.orderhub;
 
 import dev.dev48v.orderhub.config.IdempotencyProperties;
+import dev.dev48v.orderhub.config.InventoryLoadBalancerConfig;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.config.RateLimitProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.loadbalancer.annotation.LoadBalancerClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 // STEP 1 — The entry point.
@@ -29,8 +31,18 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 // registry on startup, and (b) gives Feign a DiscoveryClient so @FeignClient(name = "inventory-service")
 // resolves by NAME + load-balances instead of using a hardcoded URL. (@EnableDiscoveryClient is optional
 // since Spring Cloud auto-enables discovery when a client is present, so we keep the app class unchanged.)
+//
+// Day 22: @LoadBalancerClient binds a CUSTOM, per-service load-balancer configuration to the
+// "inventory-service" client. Until today the caller used Spring Cloud's DEFAULT round-robin balancer
+// implicitly; now InventoryLoadBalancerConfig supplies our own instance-list supplier (discovery +
+// health-check filtering + caching) and a switchable strategy (round-robin default, or random). The config
+// applies ONLY to inventory-service — any other load-balanced client would keep the defaults. Note the
+// referenced config class is deliberately NOT component-scanned (it carries no @Configuration); Spring Cloud
+// instantiates it in the isolated child context for just this client, which is why binding it here — by name
+// — is the correct wiring point.
 @SpringBootApplication
 @EnableFeignClients
+@LoadBalancerClient(name = "inventory-service", configuration = InventoryLoadBalancerConfig.class)
 @EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class, IdempotencyProperties.class})
 public class OrderHubApplication {
     public static void main(String[] args) {
