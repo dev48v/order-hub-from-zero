@@ -46,4 +46,12 @@ public interface InventoryServiceClient {
     // Mirrors InventoryController.reserve(sku, request). This is the write the order flow drives on Day 18.
     @PostMapping("/api/inventory/{sku}/reserve")
     StockView reserve(@PathVariable("sku") String sku, @RequestBody ReserveRequest request);
+
+    // Day 22 — ask "which inventory-service instance are you?". This call goes through the SAME name-based,
+    // load-balanced path as the others: Feign resolves "inventory-service" to the live instance list and the
+    // client-side load balancer (see InventoryLoadBalancerConfig) picks one. Because the response carries the
+    // answering instance's identity, hitting this repeatedly reveals the load balancer's distribution — the
+    // way we make round-robin (vs random) visible without any hardcoded instance address.
+    @GetMapping("/api/inventory/instance")
+    InstanceView whichInstance();
 }
