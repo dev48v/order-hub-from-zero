@@ -13,3 +13,19 @@ app:
   orders:
     # A human-facing banner the orders API can surface — tune it centrally, no order-service redeploy.
     greeting: "OrderHub Orders API — configuration served centrally by Spring Cloud Config"
+
+    # Day 23 — a feature flag owned CENTRALLY. Change it here and POST /actuator/refresh to order-service:
+    # RefreshableOrderConfig (a @RefreshScope bean) is re-created against the new config and adopts the new
+    # value on the running service, with no redeploy — while StaticOrderConfig keeps the old value until a
+    # restart. This is the live-refresh story made concrete; /api/config shows both. (Override of the local
+    # default in order-service application.yml.) For MANY instances at once, publish one
+    # RefreshRemoteApplicationEvent over Spring Cloud Bus (/actuator/busrefresh) instead of refreshing each.
+    express-checkout-enabled: false
+
+# Day 23 — NOTE ON SECRETS: there is deliberately NO api key / password sitting here. The config repo is
+# versioned in git, so a plaintext secret committed here would be leaked forever in history. The shipping
+# API key is externalized instead: order-service resolves it from a ${SHIPPING_API_KEY} environment-variable
+# placeholder (see order-service application.yml + ShippingCredentials). If a secret ever HAS to live in the
+# config repo, encrypt it — Spring Cloud Config Server serves `{cipher}...` values and decrypts them with an
+# `encrypt.key` before handing them out, so only ciphertext is committed. In production, back the server with
+# Vault / a secrets manager for rotation + audit. Rule: this file must contain configuration, never secrets.

@@ -170,6 +170,23 @@ app:
     default-page-size: 20   # page size used when the client doesn't ask for one
     max-page-size: 100      # hard ceiling on page size, whatever the client requests
 
+    # Day 23 — a feature flag with a LOCAL default here, overridable centrally in the config repo
+    # (config-server order-service.yml). RefreshableOrderConfig reads it under @RefreshScope, so flipping
+    # it centrally + POST /actuator/refresh turns express checkout on/off on the running service — no
+    # redeploy. StaticOrderConfig reads the same flag WITHOUT @RefreshScope, so it stays stale until a
+    # restart — the two beans side by side are what /api/config shows.
+    express-checkout-enabled: false
+
+    # Day 23 — a SENSITIVE value that must never sit as plaintext in git. What is committed here is only a
+    # PLACEHOLDER: `${SHIPPING_API_KEY:...}` resolves from the SHIPPING_API_KEY environment variable at
+    # runtime (injected by the platform, never committed). When the var is absent — local dev, tests, CI —
+    # it falls back to the clearly-labelled non-secret below, so the app still boots. The real key's value
+    # therefore never appears in source control; only the reference to it does. (In production the fallback
+    # would be dropped so a missing var fails loudly. Alternatives: Config Server `{cipher}` encryption, or
+    # Vault / AWS Secrets Manager — see ShippingCredentials.)
+    integrations:
+      shipping-api-key: ${SHIPPING_API_KEY:local-dev-placeholder-not-a-real-secret}
+
   # Day 13: token-bucket rate limiting, bound onto RateLimitProperties (prefix "app.ratelimit").
   # capacity = bucket size (and max burst); refill-period = time to refill that many tokens, greedily.
   # So the defaults below mean "20 requests / minute per client (API key or IP)". Overridable per
@@ -320,7 +337,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, circuitbreakers, circuitbreakerevents
+        # Day 23 — add `refresh` (the Spring Cloud endpoint that rebuilds the Environment from the config
+        # server and re-creates every @RefreshScope bean, so a config change is adopted with NO restart)
+        # and `env` (browse the resolved property hierarchy; Actuator auto-sanitises keys that look like
+        # secrets — password/key/token/etc. — to ****** so a secret is never echoed even here).
+        include: health, circuitbreakers, circuitbreakerevents, refresh, env
   endpoint:
     health:
       show-details: always
