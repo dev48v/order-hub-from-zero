@@ -43,6 +43,21 @@ eureka:
     prefer-ip-address: true
     instance-id: ${spring.application.name}:${server.port}
 
+# Day 24 — INTER-SERVICE AUTHENTICATION. inventory-service no longer trusts every caller that can reach
+# it: ServiceTokenAuthFilter requires a shared service token on the header below for any /api/** call and
+# rejects the rest with 401. The token is a SECRET, so — per Day 23's rule — it is NOT committed here: it
+# is resolved from the ${SERVICE_TOKEN} environment variable at runtime, injected by the platform and
+# never in git. The clearly-labelled default only applies locally when the var is absent, so dev/tests
+# still boot; in production you'd drop the default so a missing var fails loudly. order-service (its Feign
+# client) and the api-gateway present this SAME token, sourced from the SAME ${SERVICE_TOKEN} var, so the
+# whole system shares one secret without any of them hardcoding it. NOTE: /actuator/health stays OPEN
+# (the filter guards only /api/*) so Day 22's load-balancer health probes keep working.
+service:
+  auth:
+    enabled: true
+    header: X-Service-Token
+    token: ${SERVICE_TOKEN:local-dev-service-token-change-me}
+
 # Actuator: expose just the health endpoint so the service is independently observable. Every
 # service reports its OWN health — a core reason to split (you can see and scale each piece alone).
 management:

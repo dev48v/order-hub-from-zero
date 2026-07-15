@@ -217,6 +217,22 @@ orderhub:
   loadbalancer:
     strategy: round-robin
 
+# Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
+# service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
+# order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor
+# reads these two keys off ServiceAuthProperties and stamps the token on each call:
+#   • header — must equal inventory-service's service.auth.header (X-Service-Token).
+#   • token  — the SECRET. Per Day 23's rule it is NOT committed here: it resolves from the
+#              ${SERVICE_TOKEN} environment variable at runtime and never sits plaintext in git. Both
+#              services read the SAME ${SERVICE_TOKEN} var, so they agree on the token without either
+#              one hardcoding it. The clearly-labelled default only applies locally when the var is
+#              absent (dev/tests still boot); in production you'd drop it so a missing var fails loudly.
+#              It MUST match inventory-service's default so a token-less local run of both still works.
+service:
+  auth:
+    header: X-Service-Token
+    token: ${SERVICE_TOKEN:local-dev-service-token-change-me}
+
 # Day 14: Resilience4j circuit breaker for the "inventory" downstream (InventoryClient.checkStock,
 # annotated @CircuitBreaker(name = "inventory")). The breaker watches recent call outcomes and, once
 # too many fail, trips OPEN — short-circuiting every call straight to the fallback for a cooldown so

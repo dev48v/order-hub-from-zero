@@ -4,6 +4,7 @@ import dev.dev48v.orderhub.config.IdempotencyProperties;
 import dev.dev48v.orderhub.config.InventoryLoadBalancerConfig;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.config.RateLimitProperties;
+import dev.dev48v.orderhub.config.ServiceAuthProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -40,10 +41,16 @@ import org.springframework.cloud.openfeign.EnableFeignClients;
 // referenced config class is deliberately NOT component-scanned (it carries no @Configuration); Spring Cloud
 // instantiates it in the isolated child context for just this client, which is why binding it here — by name
 // — is the correct wiring point.
+//
+// Day 24: ServiceAuthProperties joins the @EnableConfigurationProperties list, binding "service.auth.*"
+// (the header + the ${SERVICE_TOKEN}-sourced token). ServiceTokenFeignInterceptor injects it and stamps
+// the token on every outbound Feign call, so order-service authenticates to inventory-service's new
+// service-token gate. No new class-level annotation is needed — the interceptor is a @Component picked up
+// by the component scan and applied globally by Feign.
 @SpringBootApplication
 @EnableFeignClients
 @LoadBalancerClient(name = "inventory-service", configuration = InventoryLoadBalancerConfig.class)
-@EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class, IdempotencyProperties.class})
+@EnableConfigurationProperties({OrderProperties.class, RateLimitProperties.class, IdempotencyProperties.class, ServiceAuthProperties.class})
 public class OrderHubApplication {
     public static void main(String[] args) {
         SpringApplication.run(OrderHubApplication.class, args);
