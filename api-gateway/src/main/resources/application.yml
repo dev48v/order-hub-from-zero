@@ -11,7 +11,8 @@ spring:
       # ---- THE ROUTE TABLE ----------------------------------------------------------------------
       # Each route is: a PREDICATE (does this request match?) -> a URI (where to send it) + FILTERS
       # (how to transform it on the way). The gateway evaluates routes top to bottom and forwards the
-      # request to the first match. These two routes are the entire public surface of the system.
+      # request to the first match. The single order-service route below is the entire PUBLIC surface
+      # of the system; inventory-service is deliberately NOT exposed here (see the note after the route).
       routes:
         # /api/orders/**  ->  the order service, resolved by name through the registry.
         - id: order-service
@@ -33,13 +34,16 @@ spring:
             # into /orders and 404.)
             - AddRequestHeader=X-Gateway, order-hub-edge
 
-        # /api/inventory/**  ->  the inventory service, same discovery-driven pattern.
-        - id: inventory-service
-          uri: lb://inventory-service
-          predicates:
-            - Path=/api/inventory/**
-          filters:
-            - AddRequestHeader=X-Gateway, order-hub-edge
+        # NOTE (Day 24 hardening) — there is deliberately NO /api/inventory/** route here.
+        # inventory-service now authenticates its callers with a shared service token: its
+        # ServiceTokenAuthFilter rejects any token-less /api/** call with 401. It is reached ONLY by
+        # order-service, which calls it DIRECTLY over service discovery — @FeignClient(name =
+        # "inventory-service") -> lb://inventory-service via Eureka, with a Feign interceptor that
+        # attaches the service token — NEVER through this gateway. Proxying it here would just forward
+        # external, token-less traffic and hand those callers a 401, so inventory-service is kept
+        # INTERNAL-ONLY: not part of the public surface. External/user-facing auth (a JWT verified at
+        # this edge) comes in a later phase. A request to /api/inventory/** at the edge now matches no
+        # route and returns 404.
 
       # ---- CORS AT THE EDGE ---------------------------------------------------------------------
       # With one front door, the browser's cross-origin policy is configured ONCE, here — not copied

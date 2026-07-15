@@ -69,17 +69,24 @@ class GatewayRouteConfigTest {
     }
 
     @Test
-    @DisplayName("/api/inventory/** routes to lb://inventory-service")
-    void inventoryRouteResolvesInventoryServiceByName() {
-        RouteDefinition inventory = routeById("inventory-service");
+    @DisplayName("/api/inventory/** is NOT exposed at the edge — inventory-service is internal-only")
+    void inventoryRouteIsNotPubliclyExposed() {
+        // Day 24 hardening: inventory-service now authenticates its callers with a shared service token
+        // and is reached ONLY by order-service directly over service discovery (client-side lb:// via
+        // Eureka, with a Feign interceptor attaching the token) — never proxied through the public
+        // gateway. So the gateway must define NO inventory route: an external client hitting
+        // /api/inventory/** matches nothing at the edge and gets 404.
+        assertThat(routes())
+                .extracting(RouteDefinition::getId)
+                .doesNotContain("inventory-service");
 
-        assertThat(inventory.getUri()).hasToString("lb://inventory-service");
-
-        PredicateDefinition path = inventory.getPredicates().stream()
+        // and no route anywhere advertises the inventory path prefix at the public edge.
+        List<String> everyPathPredicateArg = routes().stream()
+                .flatMap(r -> r.getPredicates().stream())
                 .filter(p -> "Path".equals(p.getName()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("inventory-service route has no Path predicate"));
-        assertThat(path.getArgs().values()).contains("/api/inventory/**");
+                .flatMap(p -> p.getArgs().values().stream())
+                .toList();
+        assertThat(everyPathPredicateArg).doesNotContain("/api/inventory/**");
     }
 
     @Test
