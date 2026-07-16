@@ -3,6 +3,7 @@ package dev.dev48v.orderhub.service;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.domain.OrderStatus;
+import dev.dev48v.orderhub.events.OrderEventPublisher;
 import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
@@ -50,6 +51,12 @@ class OrderServiceTest {
     @Mock
     private InventoryServiceClient inventory;
 
+    // Day 25: the event publisher is mocked here — this unit test is about the service's orchestration, not
+    // Kafka. We assert the service ASKS the publisher to emit OrderPlaced on the happy path (and not on the
+    // failure paths); the real publishing against a broker is proven in OrderPlacedEventIT.
+    @Mock
+    private OrderEventPublisher events;
+
     private OrderService service;
 
     @BeforeEach
@@ -57,7 +64,7 @@ class OrderServiceTest {
         // A record carries no behaviour to mock — construct it directly with explicit
         // limits (maxQuantity, defaultPageSize, maxPageSize) so the test is self-contained.
         OrderProperties properties = new OrderProperties(1000, 20, 100);
-        service = new OrderService(repository, properties, inventory);
+        service = new OrderService(repository, properties, inventory, events);
     }
 
     @Test
@@ -87,6 +94,9 @@ class OrderServiceTest {
         verify(repository).save(saved.capture());
         assertThat(saved.getValue().getCustomer()).isEqualTo("Ada");
         assertThat(saved.getValue().getId()).isNotBlank();
+
+        // Day 25: a successful create announces the fact — the service asks the publisher to emit OrderPlaced.
+        verify(events).publishOrderPlaced(any(Order.class));
     }
 
     @Test
@@ -99,6 +109,8 @@ class OrderServiceTest {
         // The business-limit guard runs first: neither the inventory service nor the repository is touched.
         verify(inventory, never()).reserve(any(), any());
         verify(repository, never()).save(any());
+        // No order was created, so no OrderPlaced event is emitted.
+        verify(events, never()).publishOrderPlaced(any());
     }
 
     @Test
@@ -115,6 +127,8 @@ class OrderServiceTest {
                 .hasMessageContaining("MONITOR-4K");
 
         verify(repository, never()).save(any());
+        // The order was never persisted, so nothing is announced.
+        verify(events, never()).publishOrderPlaced(any());
     }
 
     // Build a realistic Feign 409 the way the default ErrorDecoder would produce one, so the translation

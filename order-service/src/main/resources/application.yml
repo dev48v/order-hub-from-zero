@@ -77,6 +77,15 @@ spring:
       port: 6379
       timeout: 2s
 
+  # Day 25 — Kafka. Phase 4 makes OrderHub event-driven; order-service now PRODUCES an OrderPlaced event on
+  # every order create. The broker ADDRESS is externalized (never baked into the jar): it resolves from the
+  # KAFKA_BOOTSTRAP_SERVERS environment variable, falling back to the local docker-compose broker on
+  # localhost:9092 for dev. KafkaProducerConfig reads this exact key to build the producer; the JSON value
+  # serializer + timeouts are set there in code. (Lettuce-style: nothing connects at boot — the producer
+  # only reaches the broker on the first publish, and the publisher tolerates a broker that isn't there.)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
   # Day 18 — OpenFeign client tuning. A synchronous inter-service call MUST be bounded: without a read
   # timeout, a slow or hung inventory-service would tie up an order-service thread indefinitely. These
   # per-client timeouts (keyed by the @FeignClient name) cap how long we wait to CONNECT and to READ a
@@ -216,6 +225,15 @@ app:
 orderhub:
   loadbalancer:
     strategy: round-robin
+
+  # Day 25 — event publishing, bound onto OrderEventProperties (prefix "orderhub.events").
+  #   enabled — master switch for emitting domain events. On here so a real/local run publishes OrderPlaced
+  #             after each order create; the order-placing integration tests flip it off (AbstractPostgresIT)
+  #             so they stay hermetic and never reach for a broker.
+  #   order-placed-topic — the topic the OrderPlaced event goes to. The broker auto-creates it on first use.
+  events:
+    enabled: true
+    order-placed-topic: order-placed
 
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so

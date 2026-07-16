@@ -4,6 +4,7 @@ import dev.dev48v.orderhub.config.CacheConfig;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.domain.OrderStatus;
+import dev.dev48v.orderhub.events.OrderEventPublisher;
 import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
@@ -58,13 +59,18 @@ public class OrderService {
     // Day 18: the OpenFeign proxy for inventory-service. Injected like any bean; behind the interface it
     // makes a real HTTP call. This is where the two services actually talk over the wire.
     private final InventoryServiceClient inventory;
+    // Day 25: emits the OrderPlaced event to Kafka after an order is saved. Publishing is additive and
+    // non-blocking — the publisher swallows any Kafka error so order creation never fails because of it.
+    private final OrderEventPublisher events;
 
     public OrderService(OrderRepository repository,
                         OrderProperties properties,
-                        InventoryServiceClient inventory) {
+                        InventoryServiceClient inventory,
+                        OrderEventPublisher events) {
         this.repository = repository;
         this.properties = properties;
         this.inventory = inventory;
+        this.events = events;
     }
 
     // A brand-new order can't already be in the "order" cache (its id was just minted), so there's
@@ -86,7 +92,12 @@ public class OrderService {
         // hasn't enough of, fails the reservation and therefore the order.
         reserveStock(item, quantity);
         Order order = new Order(UUID.randomUUID().toString(), customer, item, quantity);
-        return repository.save(order);
+        Order saved = repository.save(order);
+        // Day 25 — the order is now durable, so announce it to the rest of the system. This is fire-and-
+        // forget: the publisher never throws back into this flow, so a Kafka outage can't fail the create.
+        // Consumers (Day 26+: inventory, payment, notifications) react to this event on their own schedule.
+        events.publishOrderPlaced(saved);
+        return saved;
     }
 
     // Day 18 — the synchronous reservation call to inventory-service, and how we handle its response.

@@ -84,5 +84,12 @@ public abstract class AbstractPostgresIT {
         // (no background registration/heartbeat threads, no connection-refused log spam).
         registry.add("eureka.client.enabled", () -> "false");
         registry.add("spring.cloud.discovery.enabled", () -> "false");
+
+        // Day 25 — order-service now PUBLISHES an OrderPlaced event to Kafka after each order create. These
+        // full-stack ITs place orders but aren't testing Kafka and have no broker in the build, so turn
+        // event publishing OFF here: placeOrder behaves exactly as before and never reaches for a broker,
+        // keeping the tests hermetic and fast. The producer itself is proven separately, against an embedded
+        // broker, in OrderPlacedEventIT.
+        registry.add("orderhub.events.enabled", () -> "false");
     }
 }

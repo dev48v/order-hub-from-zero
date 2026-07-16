@@ -226,6 +226,16 @@
       <artifactId>spring-cloud-starter-config</artifactId>
     </dependency>
 
+    <!-- Day 25: Spring for Apache Kafka — the PRODUCER side. Phase 4 makes OrderHub event-driven; today
+         order-service publishes an OrderPlaced event to the "order-placed" topic on every order create.
+         This starter brings the KafkaTemplate send API, the ProducerFactory, Boot's Kafka auto-config
+         (which reads spring.kafka.*) and the JSON serializer. The kafka-clients version is managed by the
+         Spring Boot parent, so no explicit version is needed. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
          ddl-auto with explicit, reviewable schema changes that run identically on
          H2 (local) and PostgreSQL (prod). -->
@@ -297,6 +307,16 @@
       <groupId>com.squareup.okhttp3</groupId>
       <artifactId>mockwebserver</artifactId>
       <version>${mockwebserver.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 25: spring-kafka-test — an EMBEDDED, in-JVM Kafka broker for the producer test. It stands up a
+         real broker inside the test process (no Docker, no external broker), so OrderPlacedEventIT can
+         publish an OrderPlaced and consume it back to PROVE the event was produced to the topic. Brings
+         @EmbeddedKafka, EmbeddedKafkaBroker and KafkaTestUtils. Version managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

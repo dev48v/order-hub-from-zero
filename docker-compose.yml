@@ -1,0 +1,66 @@
+# OrderHub — local backing stack
+# ---------------------------------------------------------------------------
+# `docker compose up -d` brings up the infrastructure the services expect on
+# localhost: a Kafka broker (Day 25, event-driven), plus the Redis (Day 11)
+# and PostgreSQL (Day 2) the services already use. The Spring services still
+# run on the host (via `mvn spring-boot:run` / your IDE); this file only
+# provides the stateful middleware they talk to.
+#
+# Day 25 — KAFKA. A single-node broker in KRaft mode (no ZooKeeper): from
+# Kafka 3.x the broker can run its own metadata quorum, so one container is a
+# complete broker + controller. order-service's producer publishes an
+# `OrderPlaced` event to the `order-placed` topic on every order create; the
+# broker auto-creates that topic on first use. Reachable from the host on
+# localhost:9092 (that is what spring.kafka.bootstrap-servers resolves to).
+services:
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: orderhub-kafka
+    ports:
+      - "9092:9092"       # PLAINTEXT listener the host + services connect to
+    environment:
+      # --- KRaft: this node is BOTH a broker and the controller quorum ---
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      # --- listeners: 9092 for clients, 9093 for the internal controller ---
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # --- single-node: everything replicated exactly once ---
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # let a producer create `order-placed` on first publish (dev convenience)
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Day 11 — Redis, the cache + rate-limit + idempotency store.
+  redis:
+    image: redis:7-alpine
+    container_name: orderhub-redis
+    ports:
+      - "6379:6379"
+
+  # Day 2 — PostgreSQL, the production database (order-service persistence).
+  postgres:
+    image: postgres:16-alpine
+    container_name: orderhub-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: orderhub
+      POSTGRES_USER: orderhub
+      POSTGRES_PASSWORD: orderhub
+    volumes:
+      - orderhub-pgdata:/var/lib/postgresql/data
+
+volumes:
+  orderhub-pgdata:
