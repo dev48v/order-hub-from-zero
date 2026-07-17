@@ -18,6 +18,15 @@ spring:
   config:
     import: "optional:configserver:http://localhost:8888"
 
+  # Day 26 — Kafka (the CONSUMER side). inventory-service now SUBSCRIBES to the order-placed topic that
+  # order-service publishes to, and reserves stock on each OrderPlaced. The broker ADDRESS is externalized
+  # exactly like the producer (never baked into the jar): it resolves from the KAFKA_BOOTSTRAP_SERVERS
+  # environment variable, falling back to the local docker-compose broker on localhost:9092 for dev.
+  # KafkaConsumerConfig reads this exact key to build the consumer; the JSON value deserializer + the
+  # trusted-package allow-list are set there in code. Nothing connects at boot unless the listener starts.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
 server:
   # Each service takes its own local port so they can all run on one machine: the api-gateway (the
   # public front door) owns 8080, inventory-service takes 8081, order-service sits on 8082. In a
@@ -57,6 +66,20 @@ service:
     enabled: true
     header: X-Service-Token
     token: ${SERVICE_TOKEN:local-dev-service-token-change-me}
+
+# Day 26 — event CONSUMPTION, bound onto InventoryEventProperties (prefix "inventory.events").
+#   enabled            — master switch driving the @KafkaListener's autoStartup. On here so a real/local
+#                        run subscribes and reserves stock; the non-Kafka tests flip it off so the listener
+#                        never starts and the service boots without a broker.
+#   order-placed-topic — the topic to subscribe to. MUST match order-service's orderhub.events
+#                        order-placed-topic so the two agree on the channel.
+#   consumer-group-id  — the Kafka consumer group inventory-service joins. All instances share it, so each
+#                        event is handled by exactly one instance; scaling out just adds members to the group.
+inventory:
+  events:
+    enabled: true
+    order-placed-topic: order-placed
+    consumer-group-id: inventory-service
 
 # Actuator: expose just the health endpoint so the service is independently observable. Every
 # service reports its OWN health — a core reason to split (you can see and scale each piece alone).

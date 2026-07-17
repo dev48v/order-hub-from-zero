@@ -71,9 +71,30 @@
       <artifactId>spring-cloud-starter-config</artifactId>
     </dependency>
 
+    <!-- Day 26: Spring for Apache Kafka — the CONSUMER side. Phase 4 turns OrderHub event-driven;
+         Day 25 made order-service PUBLISH an OrderPlaced event, and today inventory-service SUBSCRIBES
+         to that "order-placed" topic and reserves stock in reaction — with zero change to order-service.
+         This starter brings the @KafkaListener machinery, the ConsumerFactory, the JSON deserializer and
+         Boot's Kafka auto-config (which reads spring.kafka.*). The kafka-clients version is managed by
+         the Spring Boot parent, so no explicit version is needed. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 26: spring-kafka-test — an EMBEDDED, in-JVM Kafka broker for the consumer test. It stands up a
+         real broker inside the test process (no Docker, no external broker), so OrderPlacedConsumerTest can
+         PUBLISH an OrderPlaced and PROVE inventory-service consumes it and decrements stock. Brings
+         @EmbeddedKafka, EmbeddedKafkaBroker and KafkaTestUtils. Version managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

@@ -18,7 +18,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 // with a registry that isn't running during the build. eureka.client.enabled=false switches discovery
 // off for the test so the context loads instantly with no background registration/heartbeat threads or
 // connection-refused noise. Registering against a real registry is a runtime concern, not a unit-test one.
-@SpringBootTest(properties = "eureka.client.enabled=false")
+//
+// Day 26 — spring-kafka is now on the classpath and the service starts a @KafkaListener. inventory.events.
+// enabled=false keeps this smoke test hermetic: the listener container never starts, so the context loads
+// without a background consumer trying (and failing) to reach a broker that isn't running during the build.
+// The dedicated OrderPlacedConsumerTest exercises the consumer for real, against an embedded broker.
+@SpringBootTest(properties = {
+        "eureka.client.enabled=false",
+        "inventory.events.enabled=false"
+})
 @DisplayName("inventory-service boots as its own Spring Boot application")
 class InventoryServiceApplicationTests {
 
