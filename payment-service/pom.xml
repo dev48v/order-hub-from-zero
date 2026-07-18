@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 27 — the THIRD bounded-context service in the monorepo: the Payment service, and the FIRST
+       service that is purely event-driven end to end. Its parent is the reactor (../pom.xml), so it
+       inherits Spring Boot's dependency management + the repackage plugin and stays version-locked with
+       the other services. Like inventory-service it is its OWN deployable — its own main class, its own
+       port (8083), its own lean dependency set. Where inventory-service only CONSUMES (Day 26), payment-
+       service does BOTH: it consumes OrderPlaced from the order-placed topic and, after "processing" the
+       payment, PUBLISHES a PaymentProcessed result to a new payment-events topic. It reserves stock for no
+       one; it owns exactly one thing — deciding whether an order's payment is approved or declined. -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>payment-service</artifactId>
+  <name>OrderHub :: Payment Service</name>
+  <description>The payment bounded context — reacts to OrderPlaced, decides approve/decline, emits PaymentProcessed. Its own Spring Boot app.</description>
+
+  <dependencies>
+    <!-- REST endpoints (Tomcat + Spring MVC + Jackson). payment-service exposes a small read surface —
+         GET the payments it has recorded — so its decisions are observable directly (curl localhost:8083). -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Actuator — a health endpoint so the service is independently observable and, later, probeable by
+         a container platform. Each microservice reports its OWN health. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Day 19 — the Eureka CLIENT starter. payment-service REGISTERS itself with the Eureka server on
+         startup (under spring.application.name = "payment-service") and heartbeats to keep its lease alive,
+         exactly like the other services. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- Day 21 — the Config CLIENT starter. At startup (driven by spring.config.import=configserver:… in
+         application.yml) payment-service fetches its configuration — the shared application.yml plus its own
+         payment-service.yml — from the config server, folding those properties into the Environment before
+         any beans are created. The import is `optional:`, so tests / offline boots fall back to local
+         defaults. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
+
+    <!-- Day 27: Spring for Apache Kafka — payment-service uses BOTH sides. As a CONSUMER it subscribes to
+         the order-placed topic (its OWN consumer group, so it gets its own independent copy of every event
+         alongside inventory-service); as a PRODUCER it publishes a PaymentProcessed result to a new
+         payment-events topic via KafkaTemplate. This one starter brings the @KafkaListener machinery, the
+         ConsumerFactory + JSON deserializer, the KafkaTemplate, and Boot's Kafka auto-config. The
+         kafka-clients version is managed by the Spring Boot parent, so no explicit version is needed. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 27: spring-kafka-test — an EMBEDDED, in-JVM Kafka broker for the round-trip test. It stands up
+         a real broker inside the test process (no Docker, no external broker), so PaymentProcessedConsumerTest
+         can PUBLISH an OrderPlaced and PROVE payment-service records a Payment AND emits a PaymentProcessed —
+         both the approve and the decline path. Brings @EmbeddedKafka, EmbeddedKafkaBroker and KafkaTestUtils.
+         Version managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable Spring Boot jar — this module ships as its own runnable app,
+           launched independently of the other services. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

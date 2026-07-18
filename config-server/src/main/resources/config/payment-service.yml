@@ -1,0 +1,15 @@
+# Day 27 — config specific to PAYMENT-SERVICE, served by the config server.
+# Merged ON TOP of the shared application.yml when payment-service asks for its config
+# (GET /payment-service/default). Overrides the shared layer for payment-service only.
+orderhub:
+  platform:
+    # Overrides the shared default so payment-service reports THIS as its config-source.
+    config-source: "config-server → payment-service.yml"
+
+# The payment decision knobs, centrally tunable. payment-service ships local defaults in its own
+# application.yml; these prove the value can be owned centrally and retuned in ONE place per environment.
+payment:
+  events:
+    unit-price: 100.00
+    decline-threshold: 1000.00
+    decline-customer: DECLINE

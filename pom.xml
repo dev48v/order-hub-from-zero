@@ -86,13 +86,17 @@
        Day 21 adds config-server — the single source of truth for CONFIGURATION. Also infrastructure:
        it owns no domain, it just serves each service's externalized config from one place so shared
        settings live once instead of copy-pasted into every service. Five modules now build under one
-       reactor. -->
+       reactor.
+       Day 27 adds payment-service — the third bounded context and the first wholly event-driven service:
+       it consumes OrderPlaced (its own consumer group) and emits PaymentProcessed to a new payment-events
+       topic. Another one-line change here; six modules now build under one reactor. -->
   <modules>
     <module>config-server</module>
     <module>eureka-server</module>
     <module>api-gateway</module>
     <module>order-service</module>
     <module>inventory-service</module>
+    <module>payment-service</module>
   </modules>
 
 </project>

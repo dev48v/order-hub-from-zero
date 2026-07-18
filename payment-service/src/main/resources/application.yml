@@ -1,0 +1,77 @@
+# Day 27 — the Payment service's OWN configuration, separate from the other services'.
+# Each microservice has its own config file, its own name, and its own port. That independence is the
+# point: payment-service boots as its own process and never shares a config surface with the others.
+spring:
+  application:
+    # The SERVICE ID under which payment-service registers in Eureka. Its own logical name, disjoint from
+    # order-service and inventory-service.
+    name: payment-service
+
+  # Day 21 — become a CONFIG CLIENT. At startup, fetch this service's configuration from the Spring Cloud
+  # Config Server (port 8888) using the service name above: the server returns the shared application.yml
+  # merged with payment-service.yml, joined to this Environment BEFORE the beans are created. `optional:` is
+  # the safety net: if the config server isn't running (tests, offline) the import is skipped silently and
+  # the service boots on its local defaults.
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+  # Day 27 — Kafka. payment-service uses BOTH sides: it SUBSCRIBES to order-placed (consumer) and PUBLISHES
+  # PaymentProcessed to payment-events (producer). The broker ADDRESS is externalized exactly like every
+  # other service (never baked into the jar): it resolves from the KAFKA_BOOTSTRAP_SERVERS environment
+  # variable, falling back to the local docker-compose broker on localhost:9092 for dev. Both KafkaConsumerConfig
+  # and KafkaProducerConfig read this exact key. Nothing connects at boot unless the listener starts.
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+server:
+  # Each service takes its own local port so they can all run on one machine: api-gateway 8080,
+  # inventory-service 8081, order-service 8082, and payment-service takes 8083.
+  port: 8083
+
+# Day 19 — register with the Eureka service registry. On startup the Eureka client POSTs this instance
+# (host + port + app name) to the server, then heartbeats every ~30s to keep the lease alive; a crash lets
+# the lease expire so callers stop being handed a dead address.
+eureka:
+  # The registry address lives in the config server's SHARED application.yml and is fetched at startup via
+  # spring.config.import above. If the config server is unreachable, Eureka's built-in default
+  # (http://localhost:8761/eureka/) applies, so local/offline boot is unchanged.
+  instance:
+    # Register by IP rather than hostname — more robust across dev machines / containers. The instance id keeps
+    # the app name + port readable in the dashboard.
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+# Day 27 — payment-service settings, bound onto PaymentEventProperties (prefix "payment.events").
+#   EVENT ROUTING
+#   enabled              — master switch driving the @KafkaListener's autoStartup AND the result publisher.
+#                          On here so a real/local run consumes OrderPlaced and emits PaymentProcessed; the
+#                          non-Kafka smoke test flips it off so the listener never starts and the service boots
+#                          without a broker.
+#   order-placed-topic   — the topic to SUBSCRIBE to. MUST match order-service's orderhub.events order-placed-topic.
+#   payment-events-topic — the topic this service PUBLISHES its result to. Day 28's saga consumes it.
+#   consumer-group-id    — payment-service's OWN consumer group (DISTINCT from inventory-service's), so both
+#                          services receive their own independent copy of every OrderPlaced.
+#   PAYMENT SIMULATION (deterministic stand-in for a real gateway)
+#   unit-price           — flat per-unit price; charge amount = unit-price × order quantity.
+#   decline-threshold    — an amount over this is DECLINED as over-limit; at or under is APPROVED.
+#   decline-customer     — a "test card": an order from this customer name is always DECLINED.
+payment:
+  events:
+    enabled: true
+    order-placed-topic: order-placed
+    payment-events-topic: payment-events
+    consumer-group-id: payment-service
+    unit-price: 100.00
+    decline-threshold: 1000.00
+    decline-customer: DECLINE
+
+# Actuator: expose just the health endpoint so the service is independently observable. Every service reports
+# its OWN health — a core reason to split.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always
