@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 28 — the FOURTH bounded-context service and the piece that closes the CHOREOGRAPHY SAGA:
+       order -> inventory -> payment -> ship. Its parent is the reactor (../pom.xml), so it inherits Spring
+       Boot's dependency management + the repackage plugin and stays version-locked with the other services.
+       Like payment-service it is its OWN deployable — its own main class, its own port (8084), its own lean
+       dependency set — and it is wholly EVENT-DRIVEN: it is triggered by an event (PaymentProcessed) and it
+       answers with events (ShipmentScheduled on approve, OrderCancelled on decline). There is NO central
+       orchestrator: shipping-service just REACTS to payment-service's result, and its OWN emission
+       (OrderCancelled) is in turn REACTED to by inventory-service, which releases the reserved stock. That
+       chain of "a fact triggers a reaction that states the next fact" is exactly what choreography means. -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>shipping-service</artifactId>
+  <name>OrderHub :: Shipping Service</name>
+  <description>The shipping bounded context — reacts to PaymentProcessed, ships on approve, compensates (cancel + release stock) on decline. Its own Spring Boot app.</description>
+
+  <dependencies>
+    <!-- REST endpoints (Tomcat + Spring MVC + Jackson). shipping-service exposes a small read surface —
+         GET the shipments/cancellations it has recorded — so the saga's outcome is observable directly
+         (curl localhost:8084/api/shipments). The writes all happen in the @KafkaListener. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Actuator — a health endpoint so the service is independently observable and, later, probeable by
+         a container platform. Each microservice reports its OWN health. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Day 19 — the Eureka CLIENT starter. shipping-service REGISTERS itself with the Eureka server on
+         startup (under spring.application.name = "shipping-service") and heartbeats to keep its lease alive,
+         exactly like the other services. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- Day 21 — the Config CLIENT starter. At startup (driven by spring.config.import=configserver:… in
+         application.yml) shipping-service fetches its configuration — the shared application.yml plus its own
+         shipping-service.yml — from the config server, folding those properties into the Environment before
+         any beans are created. The import is `optional:`, so tests / offline boots fall back to local
+         defaults. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
+
+    <!-- Day 28: Spring for Apache Kafka — shipping-service uses BOTH sides. As a CONSUMER it subscribes to
+         the payment-events topic (its OWN consumer group) and reads each PaymentProcessed result; as a
+         PRODUCER it publishes the saga's next fact — ShipmentScheduled to shipping-events when the payment is
+         approved, or OrderCancelled to order-cancelled when it is declined (the COMPENSATING event that makes
+         inventory-service release the reserved stock). This one starter brings the @KafkaListener machinery,
+         the ConsumerFactory + JSON deserializer, the KafkaTemplate, and Boot's Kafka auto-config. The
+         kafka-clients version is managed by the Spring Boot parent, so no explicit version is needed. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 28: spring-kafka-test — an EMBEDDED, in-JVM Kafka broker for the end-to-end saga test. It stands
+         up a real broker inside the test process (no Docker, no external broker), so the choreography test can
+         PUBLISH a PaymentProcessed and PROVE shipping-service records the order's fate AND emits the right next
+         event — the HAPPY path (approved -> shipped/confirmed) AND the COMPENSATION path (declined -> cancelled
+         + OrderCancelled emitted). Brings @EmbeddedKafka, EmbeddedKafkaBroker and KafkaTestUtils. Version
+         managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable Spring Boot jar — this module ships as its own runnable app,
+           launched independently of the other services. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

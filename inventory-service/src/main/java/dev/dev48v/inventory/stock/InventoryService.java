@@ -38,4 +38,16 @@ public class InventoryService {
         item.reserve(quantity);          // domain enforces "never over-commit"
         return repository.save(item);
     }
+
+    // Day 28 — the COMPENSATION for reserve(): put previously-reserved units back on hand. When the
+    // choreography saga cancels an order (payment declined, or a downstream failure), inventory-service
+    // reacts by RELEASING the stock it had held for that order — the inverse of the reservation it made on
+    // OrderPlaced. This is how a distributed saga "rolls back" a step that has no shared DB transaction: not
+    // by undoing a commit, but by applying a compensating operation. The symmetric domain method (replenish)
+    // guards the invariant just like reserve() does.
+    public StockItem release(String sku, int quantity) {
+        StockItem item = getStock(sku);
+        item.replenish(quantity);        // symmetric with reserve — units go back on hand
+        return repository.save(item);
+    }
 }

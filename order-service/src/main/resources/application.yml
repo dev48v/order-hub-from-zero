@@ -235,6 +235,26 @@ orderhub:
     enabled: true
     order-placed-topic: order-placed
 
+  # Day 28 — the CHOREOGRAPHY SAGA, bound onto SagaEventProperties (prefix "orderhub.saga"). order-service is
+  # now event-driven BOTH ways: besides publishing OrderPlaced (above), it CONSUMES the two result events the
+  # other services emit and reacts — shipping the order or compensating it.
+  #   enabled             — master switch for the two saga @KafkaListeners' autoStartup AND the result publisher.
+  #                         On here so a real/local run drives the saga; the existing full-context tests flip it
+  #                         off (AbstractPostgresIT / OrderRepositoryIT / ConfigRefreshAndSecretsTest) so no
+  #                         consumer starts and the app boots without a broker, exactly as before Day 28.
+  #   stock-events-topic  — SUBSCRIBE for inventory's StockReserved. Must match inventory.events.stock-events-topic.
+  #   payment-events-topic — SUBSCRIBE for payment's PaymentProcessed. Must match payment.events.payment-events-topic.
+  #   order-shipped-topic — PUBLISH OrderShipped here on the happy path (the "ship" step).
+  #   order-cancelled-topic — PUBLISH OrderCancelled here to compensate; inventory-service releases stock off it.
+  #   consumer-group-id   — order-service's OWN saga consumer group (distinct from the other services').
+  saga:
+    enabled: true
+    stock-events-topic: inventory-events
+    payment-events-topic: payment-events
+    order-shipped-topic: order-shipped
+    order-cancelled-topic: order-cancelled
+    consumer-group-id: order-saga
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor

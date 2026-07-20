@@ -91,5 +91,11 @@ public abstract class AbstractPostgresIT {
         // keeping the tests hermetic and fast. The producer itself is proven separately, against an embedded
         // broker, in OrderPlacedEventIT.
         registry.add("orderhub.events.enabled", () -> "false");
+
+        // Day 28 — order-service now also CONSUMES two result topics to drive the choreography saga. These
+        // full-stack ITs boot the whole app but test the order API, not the saga, and have no broker in the
+        // build, so turn the saga OFF here too: its two @KafkaListener containers never start and the context
+        // stays hermetic. The saga is proven separately against an embedded broker in OrderSagaChoreographyTest.
+        registry.add("orderhub.saga.enabled", () -> "false");
     }
 }

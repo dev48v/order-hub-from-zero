@@ -29,10 +29,13 @@ public class OrderPlacedListener {
 
     private final InventoryService inventoryService;
     private final ReservationLedger ledger;
+    private final StockResultPublisher publisher;
 
-    public OrderPlacedListener(InventoryService inventoryService, ReservationLedger ledger) {
+    public OrderPlacedListener(InventoryService inventoryService, ReservationLedger ledger,
+                               StockResultPublisher publisher) {
         this.inventoryService = inventoryService;
         this.ledger = ledger;
+        this.publisher = publisher;
     }
 
     // Subscribe to the order-placed topic. topics/groupId resolve from inventory.events.* (with literal
@@ -56,26 +59,34 @@ public class OrderPlacedListener {
             return;
         }
 
+        Reservation reservation;
         try {
             // The reaction: reserve `quantity` units of the ordered SKU. This is the same domain call
             // the Feign endpoint used to invoke — now driven by an event instead of an HTTP request.
             StockItem item = inventoryService.reserve(event.item(), event.quantity());
-            ledger.record(Reservation.reserved(orderId, event.eventId(), event.item(),
-                    event.quantity(), item.available()));
+            reservation = Reservation.reserved(orderId, event.eventId(), event.item(),
+                    event.quantity(), item.available());
             log.info("Reserved {} x {} for order {} - {} units remaining",
                     event.quantity(), event.item(), orderId, item.available());
         } catch (InsufficientStockException e) {
             // GRACEFUL: not enough on hand. Do NOT rethrow (that would make the container redeliver this
-            // record forever). Record the outcome and move on; a saga can compensate off this mark.
-            ledger.record(Reservation.failed(orderId, event.eventId(), event.item(),
-                    event.quantity(), "INSUFFICIENT_STOCK"));
+            // record forever). Record the outcome and move on; the saga compensates off this mark.
+            reservation = Reservation.failed(orderId, event.eventId(), event.item(),
+                    event.quantity(), "INSUFFICIENT_STOCK");
             log.warn("Insufficient stock to reserve {} x {} for order {}: {}",
                     event.quantity(), event.item(), orderId, e.getMessage());
         } catch (UnknownSkuException e) {
             // GRACEFUL: the order names a SKU this service doesn't stock. Same policy — mark, don't crash.
-            ledger.record(Reservation.failed(orderId, event.eventId(), event.item(),
-                    event.quantity(), "UNKNOWN_SKU"));
+            reservation = Reservation.failed(orderId, event.eventId(), event.item(),
+                    event.quantity(), "UNKNOWN_SKU");
             log.warn("Unknown SKU '{}' on order {} - cannot reserve", event.item(), orderId);
         }
+
+        // Record the outcome in the ledger, then Day 28: ANSWER with a StockReserved event so the choreography
+        // saga hears the result — RESERVED completes the stock leg, a failure lets the saga compensate. The
+        // publish runs exactly once per order (we returned early on a duplicate claim above) and swallows its
+        // own errors, so it can never crash or loop the consumer.
+        ledger.record(reservation);
+        publisher.publish(StockReservedEvent.from(reservation));
     }
 }

@@ -1,6 +1,7 @@
 package dev.dev48v.inventory.config;
 
 import dev.dev48v.inventory.events.InventoryEventProperties;
+import dev.dev48v.inventory.events.OrderCancelledEvent;
 import dev.dev48v.inventory.events.OrderPlacedEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -84,6 +85,37 @@ public class KafkaConsumerConfig {
         ConcurrentKafkaListenerContainerFactory<String, OrderPlacedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(orderEventConsumerFactory);
+        return factory;
+    }
+
+    // ---- Day 28: the COMPENSATION consumer — order-cancelled -> OrderCancelledEvent -----------------------
+    // The saga's compensating fact arrives on its own topic; inventory-service reacts by releasing the stock
+    // it reserved. Same shared consumer config as above — same broker, same group (inventory-service's own),
+    // same earliest-offset + container-managed commits — just typed to a different event. KEY = String (the
+    // order id order-service keyed by); VALUE = OrderCancelledEvent, rebuilt from the type-header-less JSON.
+    @Bean
+    public ConsumerFactory<String, OrderCancelledEvent> orderCancelledConsumerFactory() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(ConsumerConfig.GROUP_ID_CONFIG, properties.consumerGroupId());
+        config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        JsonDeserializer<OrderCancelledEvent> valueDeserializer = new JsonDeserializer<>(OrderCancelledEvent.class);
+        valueDeserializer.setUseTypeHeaders(false);
+        valueDeserializer.addTrustedPackages("dev.dev48v.*");
+
+        return new DefaultKafkaConsumerFactory<>(config, new StringDeserializer(), valueDeserializer);
+    }
+
+    // The container factory OrderCancelledListener references by name. Typed to OrderCancelledEvent so the
+    // listener method takes the decoded event directly.
+    @Bean
+    public ConcurrentKafkaListenerContainerFactory<String, OrderCancelledEvent> orderCancelledListenerContainerFactory(
+            ConsumerFactory<String, OrderCancelledEvent> orderCancelledConsumerFactory) {
+        ConcurrentKafkaListenerContainerFactory<String, OrderCancelledEvent> factory =
+                new ConcurrentKafkaListenerContainerFactory<>();
+        factory.setConsumerFactory(orderCancelledConsumerFactory);
         return factory;
     }
 }

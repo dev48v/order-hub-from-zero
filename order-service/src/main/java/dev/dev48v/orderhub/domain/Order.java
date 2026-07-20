@@ -67,6 +67,31 @@ public class Order {
         this.status = OrderStatus.CONFIRMED;
     }
 
+    // Day 28 — the happy-path terminal step of the choreography saga. Once stock is RESERVED and the
+    // payment is APPROVED, the order saga confirms then SHIPS the order. Shipping is only valid from
+    // CONFIRMED, keeping the lifecycle PLACED → CONFIRMED → SHIPPED strictly ordered.
+    public void ship() {
+        if (status != OrderStatus.CONFIRMED) {
+            throw new IllegalStateException("Only a CONFIRMED order can be shipped (was " + status + ")");
+        }
+        this.status = OrderStatus.SHIPPED;
+    }
+
+    // Day 28 — the COMPENSATING transition of the saga. When a downstream step fails (payment declined,
+    // or stock could not be reserved), the order is rolled back to CANCELLED. It's valid from any
+    // not-yet-terminal state the saga can be in when the failure is learned (PLACED or CONFIRMED); a
+    // second cancel is a no-op so a redelivered failure event can't throw. An already-SHIPPED order is
+    // terminal and cannot be cancelled by the saga.
+    public void cancel() {
+        if (status == OrderStatus.CANCELLED) {
+            return; // idempotent — already compensated
+        }
+        if (status == OrderStatus.SHIPPED) {
+            throw new IllegalStateException("A SHIPPED order cannot be cancelled");
+        }
+        this.status = OrderStatus.CANCELLED;
+    }
+
     public String getId() { return id; }
     public String getCustomer() { return customer; }
     public String getItem() { return item; }

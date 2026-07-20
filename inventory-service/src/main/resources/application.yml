@@ -68,17 +68,24 @@ service:
     token: ${SERVICE_TOKEN:local-dev-service-token-change-me}
 
 # Day 26 — event CONSUMPTION, bound onto InventoryEventProperties (prefix "inventory.events").
-#   enabled            — master switch driving the @KafkaListener's autoStartup. On here so a real/local
-#                        run subscribes and reserves stock; the non-Kafka tests flip it off so the listener
-#                        never starts and the service boots without a broker.
-#   order-placed-topic — the topic to subscribe to. MUST match order-service's orderhub.events
-#                        order-placed-topic so the two agree on the channel.
-#   consumer-group-id  — the Kafka consumer group inventory-service joins. All instances share it, so each
-#                        event is handled by exactly one instance; scaling out just adds members to the group.
+# Day 28 — inventory-service is now event-driven BOTH ways: it still consumes OrderPlaced, but it also
+# ANSWERS with StockReserved and REACTS to the saga's compensating OrderCancelled.
+#   enabled              — master switch driving BOTH @KafkaListeners' autoStartup AND the StockReserved
+#                          publisher. On here so a real/local run consumes + emits; the non-Kafka tests flip
+#                          it off so no container starts and the service boots without a broker.
+#   order-placed-topic   — SUBSCRIBE for OrderPlaced. MUST match order-service's orderhub.events order-placed-topic.
+#   stock-events-topic   — PUBLISH StockReserved here. MUST match order-service's orderhub.saga.stock-events-topic
+#                          (the order saga waits on it).
+#   order-cancelled-topic — SUBSCRIBE for the saga's compensating OrderCancelled; on each one we release the
+#                          reserved stock. MUST match order-service's orderhub.saga.order-cancelled-topic.
+#   consumer-group-id    — the Kafka consumer group inventory-service joins. All instances share it, so each
+#                          event is handled by exactly one instance; scaling out just adds members to the group.
 inventory:
   events:
     enabled: true
     order-placed-topic: order-placed
+    stock-events-topic: inventory-events
+    order-cancelled-topic: order-cancelled
     consumer-group-id: inventory-service
 
 # Actuator: expose just the health endpoint so the service is independently observable. Every

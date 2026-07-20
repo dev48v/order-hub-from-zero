@@ -27,7 +27,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {
                 "eureka.client.enabled=false",
-                "spring.cloud.discovery.enabled=false"
+                "spring.cloud.discovery.enabled=false",
+                // Day 28 — this boots the full app context, which now includes the saga's two @KafkaListeners.
+                // Keep them from starting against a broker that isn't running in this offline test.
+                "orderhub.saga.enabled=false"
         })
 @DisplayName("Day 23 · live config refresh + externalized secret")
 class ConfigRefreshAndSecretsTest {

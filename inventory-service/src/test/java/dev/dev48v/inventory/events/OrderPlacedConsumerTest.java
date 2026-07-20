@@ -1,6 +1,7 @@
 package dev.dev48v.inventory.events;
 
 import dev.dev48v.inventory.config.KafkaConsumerConfig;
+import dev.dev48v.inventory.config.KafkaProducerConfig;
 import dev.dev48v.inventory.stock.InMemoryStockRepository;
 import dev.dev48v.inventory.stock.InventoryService;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -45,9 +46,10 @@ import static org.awaitility.Awaitility.await;
                 "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
                 "inventory.events.enabled=true",
                 "inventory.events.order-placed-topic=order-placed",
+                "inventory.events.stock-events-topic=inventory-events",
                 "inventory.events.consumer-group-id=inventory-consumer-test"
         })
-@EmbeddedKafka(partitions = 1, topics = "order-placed")
+@EmbeddedKafka(partitions = 1, topics = {"order-placed", "inventory-events"})
 @DisplayName("Day 26 · inventory-service consumes OrderPlaced and reserves stock")
 class OrderPlacedConsumerTest {
 
@@ -56,7 +58,10 @@ class OrderPlacedConsumerTest {
     // The real consumer beans + a real InventoryService over the seeded in-memory repository + the ledger.
     // Same shape as the producer test's TestApp: a plain (lite) config passed as the sole classes = ... so
     // Spring Boot keeps the context SLICED and does not fall back to the full @SpringBootApplication.
-    @Import({KafkaConsumerConfig.class, OrderPlacedListener.class, InventoryService.class,
+    // Day 28: the listener now also PUBLISHES StockReserved, so its producer config + publisher join the slice
+    // (the inventory-events topic above receives those emissions; this test still asserts the reserve behaviour).
+    @Import({KafkaConsumerConfig.class, KafkaProducerConfig.class, OrderPlacedListener.class,
+            StockResultPublisher.class, InventoryService.class,
             InMemoryStockRepository.class, ReservationLedger.class})
     static class TestApp {
     }

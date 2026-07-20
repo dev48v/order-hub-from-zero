@@ -34,7 +34,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 // free of registration/heartbeat noise against a registry that isn't running in the build.
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false"
+        "spring.cloud.discovery.enabled=false",
+        // Day 28 — this full-app IT tests persistence only; keep the saga's two Kafka consumers from starting
+        // against a broker that isn't running in the build (the saga is proven in OrderSagaChoreographyTest).
+        "orderhub.saga.enabled=false"
 })
 @Testcontainers
 class OrderRepositoryIT {

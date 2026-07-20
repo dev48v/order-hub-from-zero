@@ -16,7 +16,7 @@ public record Reservation(
         String eventId,
         String sku,
         int quantity,
-        String outcome,   // RESERVED | INSUFFICIENT_STOCK | UNKNOWN_SKU
+        String outcome,   // RESERVED | INSUFFICIENT_STOCK | UNKNOWN_SKU | RELEASED
         int remaining,    // units left after a successful reserve; -1 when nothing was reserved
         Instant reservedAt
 ) {
@@ -29,7 +29,18 @@ public record Reservation(
         return new Reservation(orderId, eventId, sku, quantity, outcome, -1, Instant.now());
     }
 
+    // Day 28 — mark a previously-RESERVED reservation as RELEASED once its stock has been put back (the
+    // compensation for a cancelled order). Copies the reserved sku/quantity so the record stays a faithful
+    // audit trail of what was held and then returned.
+    public Reservation asReleased() {
+        return new Reservation(orderId, eventId, sku, quantity, "RELEASED", remaining, Instant.now());
+    }
+
     public boolean isReserved() {
         return "RESERVED".equals(outcome);
+    }
+
+    public boolean isReleased() {
+        return "RELEASED".equals(outcome);
     }
 }

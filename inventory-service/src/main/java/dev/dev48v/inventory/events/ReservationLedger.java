@@ -38,6 +38,24 @@ public class ReservationLedger {
         reservations.put(reservation.orderId(), reservation);
     }
 
+    // Day 28 — the COMPENSATION primitive, made idempotent. Atomically flip an order's reservation from
+    // RESERVED to RELEASED and return the reservation as it WAS (so the caller knows the sku + quantity to put
+    // back). Returns empty when there is nothing to release — the order was never reserved (a failed/unknown
+    // reservation), or it was ALREADY released by an earlier delivery of the same cancel event. Because Kafka
+    // is at-least-once, the compensating OrderCancelled can arrive twice; computing the flip atomically and
+    // only acting on a still-RESERVED entry means the stock is put back EXACTLY ONCE, never double-replenished.
+    public Optional<Reservation> releaseIfReserved(String orderId) {
+        Reservation[] released = new Reservation[1];
+        reservations.compute(orderId, (id, current) -> {
+            if (current != null && current.isReserved()) {
+                released[0] = current;          // capture the pre-release snapshot for the caller
+                return current.asReleased();    // latch RELEASED so a redelivery is a no-op
+            }
+            return current;                     // nothing to release — leave it untouched
+        });
+        return Optional.ofNullable(released[0]);
+    }
+
     public Optional<Reservation> forOrder(String orderId) {
         return Optional.ofNullable(reservations.get(orderId));
     }
