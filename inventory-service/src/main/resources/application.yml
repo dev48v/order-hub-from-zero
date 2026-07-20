@@ -88,6 +88,17 @@ inventory:
     order-cancelled-topic: order-cancelled
     consumer-group-id: inventory-service
 
+  # Day 29 — the ORCHESTRATION command handler, bound onto OrchestrationProperties (prefix
+  # "inventory.orchestration"). ADDITIVE + opt-in beside the choreography consumer above: with it enabled,
+  # inventory-service ALSO subscribes to the shared saga-commands topic and executes the RESERVE_STOCK /
+  # RELEASE_STOCK commands the orchestrator sends, replying on saga-replies. DEFAULTS OFF so the service boots
+  # exactly as before (choreography stays the shipped default); the two patterns are mutually exclusive.
+  orchestration:
+    enabled: false
+    commands-topic: saga-commands
+    replies-topic: saga-replies
+    consumer-group-id: inventory-orchestration
+
 # Actuator: expose just the health endpoint so the service is independently observable. Every
 # service reports its OWN health — a core reason to split (you can see and scale each piece alone).
 management:

@@ -255,6 +255,26 @@ orderhub:
     order-cancelled-topic: order-cancelled
     consumer-group-id: order-saga
 
+  # Day 29 — the ORCHESTRATION saga, bound onto OrchestrationProperties (prefix "orderhub.orchestration"). This
+  # is the ALTERNATIVE coordination style to Day 28's choreography (above): a central SagaOrchestrator that
+  # issues explicit COMMANDS (saga-commands) and awaits explicit REPLIES (saga-replies), driving order →
+  # inventory → payment → ship as one state machine and issuing compensation commands (ReleaseStock) in reverse
+  # on failure.
+  #   enabled           — master switch for the orchestrator's two @KafkaListeners' autoStartup AND the command
+  #                       publisher. DEFAULTS OFF: choreography is the shipped default, so the orchestrator stays
+  #                       dormant and the app boots unchanged. Flip this on (and orderhub.saga.enabled off) to
+  #                       drive the SAME flow via a coordinator instead — the two patterns are mutually exclusive.
+  #   order-placed-topic — SUBSCRIBE for OrderPlaced (the saga's trigger). Same topic order-service publishes to.
+  #   commands-topic    — PUBLISH commands here; every participant subscribes (its own group) + handles its kinds.
+  #   replies-topic     — SUBSCRIBE for participants' replies; the orchestrator is the sole consumer.
+  #   consumer-group-id — the orchestrator's OWN group for BOTH its subscriptions, distinct from participants'.
+  orchestration:
+    enabled: false
+    order-placed-topic: order-placed
+    commands-topic: saga-commands
+    replies-topic: saga-replies
+    consumer-group-id: order-orchestrator
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor

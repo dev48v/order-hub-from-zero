@@ -65,6 +65,17 @@ payment:
     decline-threshold: 1000.00
     decline-customer: DECLINE
 
+  # Day 29 — the ORCHESTRATION command handler, bound onto OrchestrationProperties (prefix
+  # "payment.orchestration"). ADDITIVE + opt-in beside the choreography consumer above: with it enabled,
+  # payment-service ALSO subscribes to saga-commands and runs the PROCESS_PAYMENT command the orchestrator
+  # sends (reusing the SAME deterministic decision), replying on saga-replies. DEFAULTS OFF so the service boots
+  # exactly as before; the two coordination styles are mutually exclusive.
+  orchestration:
+    enabled: false
+    commands-topic: saga-commands
+    replies-topic: saga-replies
+    consumer-group-id: payment-orchestration
+
 # Actuator: expose just the health endpoint so the service is independently observable. Every service reports
 # its OWN health — a core reason to split.
 management:
