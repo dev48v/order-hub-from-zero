@@ -8,6 +8,7 @@ import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
 import dev.dev48v.orderhub.inventory.StockView;
+import dev.dev48v.orderhub.outbox.OutboxWriter;
 import dev.dev48v.orderhub.repository.OrderRepository;
 import feign.FeignException;
 import feign.Request;
@@ -57,6 +58,13 @@ class OrderServiceTest {
     @Mock
     private OrderEventPublisher events;
 
+    // Day 30: the transactional-outbox writer is mocked. A Mockito mock's boolean append(...) returns false by
+    // default — i.e. "outbox off" — so this unit test exercises the SAME direct-publish path it always did, and
+    // the existing assertions on `events` still hold. The outbox's own behaviour is proven end to end in the
+    // Day-30 outbox test. Here we only check the service branches on it correctly.
+    @Mock
+    private OutboxWriter outbox;
+
     private OrderService service;
 
     @BeforeEach
@@ -64,7 +72,7 @@ class OrderServiceTest {
         // A record carries no behaviour to mock — construct it directly with explicit
         // limits (maxQuantity, defaultPageSize, maxPageSize) so the test is self-contained.
         OrderProperties properties = new OrderProperties(1000, 20, 100);
-        service = new OrderService(repository, properties, inventory, events);
+        service = new OrderService(repository, properties, inventory, events, outbox);
     }
 
     @Test
@@ -95,7 +103,9 @@ class OrderServiceTest {
         assertThat(saved.getValue().getCustomer()).isEqualTo("Ada");
         assertThat(saved.getValue().getId()).isNotBlank();
 
-        // Day 25: a successful create announces the fact — the service asks the publisher to emit OrderPlaced.
+        // Day 30: a successful create first offers the event to the OUTBOX. Here the (mocked) writer reports
+        // "outbox off" (append → false), so the service falls back to the Day-25 direct publish.
+        verify(outbox).append(any(Order.class));
         verify(events).publishOrderPlaced(any(Order.class));
     }
 
@@ -109,7 +119,8 @@ class OrderServiceTest {
         // The business-limit guard runs first: neither the inventory service nor the repository is touched.
         verify(inventory, never()).reserve(any(), any());
         verify(repository, never()).save(any());
-        // No order was created, so no OrderPlaced event is emitted.
+        // No order was created, so nothing is recorded to the outbox and no OrderPlaced event is emitted.
+        verify(outbox, never()).append(any());
         verify(events, never()).publishOrderPlaced(any());
     }
 
@@ -127,7 +138,8 @@ class OrderServiceTest {
                 .hasMessageContaining("MONITOR-4K");
 
         verify(repository, never()).save(any());
-        // The order was never persisted, so nothing is announced.
+        // The order was never persisted, so nothing is recorded to the outbox and nothing is announced.
+        verify(outbox, never()).append(any());
         verify(events, never()).publishOrderPlaced(any());
     }
 

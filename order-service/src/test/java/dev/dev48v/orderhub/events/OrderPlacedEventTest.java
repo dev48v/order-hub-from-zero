@@ -6,6 +6,8 @@ import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
 import dev.dev48v.orderhub.inventory.StockView;
+import dev.dev48v.orderhub.outbox.OutboxProperties;
+import dev.dev48v.orderhub.outbox.OutboxWriter;
 import dev.dev48v.orderhub.repository.OrderRepository;
 import dev.dev48v.orderhub.service.OrderService;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -73,12 +75,22 @@ class OrderPlacedEventTest {
             return new OrderProperties(1000, 20, 100);
         }
 
+        // Day 30 — the outbox is DISABLED in this Day-25 producer slice, so placeOrder keeps its direct-publish
+        // path (the behaviour this test asserts). A disabled writer short-circuits on !enabled before touching
+        // its repository or mapper, so the nulls here are inert — it never uses them.
+        @Bean
+        OutboxWriter outboxWriter() {
+            return new OutboxWriter(null, null,
+                    new OutboxProperties(false, "order-placed", "Order", true, 200));
+        }
+
         @Bean
         OrderService orderService(OrderRepository repository,
                                   OrderProperties properties,
                                   InventoryServiceClient inventory,
-                                  OrderEventPublisher events) {
-            return new OrderService(repository, properties, inventory, events);
+                                  OrderEventPublisher events,
+                                  OutboxWriter outbox) {
+            return new OrderService(repository, properties, inventory, events, outbox);
         }
     }
 

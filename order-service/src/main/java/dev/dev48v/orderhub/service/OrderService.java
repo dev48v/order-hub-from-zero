@@ -9,6 +9,7 @@ import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
 import dev.dev48v.orderhub.inventory.StockView;
+import dev.dev48v.orderhub.outbox.OutboxWriter;
 import dev.dev48v.orderhub.repository.OrderRepository;
 import feign.FeignException;
 import org.slf4j.Logger;
@@ -20,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -62,20 +64,34 @@ public class OrderService {
     // Day 25: emits the OrderPlaced event to Kafka after an order is saved. Publishing is additive and
     // non-blocking — the publisher swallows any Kafka error so order creation never fails because of it.
     private final OrderEventPublisher events;
+    // Day 30: the transactional-outbox writer. When the outbox is ON, placeOrder records the OrderPlaced event
+    // into the outbox table in the SAME transaction as the order (see placeOrder), and a relay publishes it
+    // later; the direct publish above is skipped. When it's OFF (default), append() is a no-op that returns
+    // false and the Day-25 direct publish stands — so this is fully non-breaking.
+    private final OutboxWriter outbox;
 
     public OrderService(OrderRepository repository,
                         OrderProperties properties,
                         InventoryServiceClient inventory,
-                        OrderEventPublisher events) {
+                        OrderEventPublisher events,
+                        OutboxWriter outbox) {
         this.repository = repository;
         this.properties = properties;
         this.inventory = inventory;
         this.events = events;
+        this.outbox = outbox;
     }
 
     // A brand-new order can't already be in the "order" cache (its id was just minted), so there's
     // nothing per-id to evict here. But it DOES change the full list, so we drop the "orders" cache
     // so the next listOrders() rebuilds from the database and includes this new row.
+    //
+    // Day 30 — @Transactional is what makes the transactional OUTBOX work. The order INSERT
+    // (repository.save) and the outbox INSERT (outbox.append) now run inside ONE transaction, so state and
+    // the intent-to-publish commit ATOMICALLY — either both land or, on any failure, neither does. Without a
+    // shared transaction the two would be separate writes again, and a crash between them could diverge them.
+    // (When the outbox is OFF, append() is a no-op and this is simply a normal single-write transaction.)
+    @Transactional
     @CacheEvict(cacheNames = CacheConfig.ORDERS_CACHE, allEntries = true)
     public Order placeOrder(String customer, String item, int quantity) {
         // The DTO's @Max is a static fast-fail at the HTTP edge; this is the authoritative,
@@ -93,10 +109,16 @@ public class OrderService {
         reserveStock(item, quantity);
         Order order = new Order(UUID.randomUUID().toString(), customer, item, quantity);
         Order saved = repository.save(order);
-        // Day 25 — the order is now durable, so announce it to the rest of the system. This is fire-and-
-        // forget: the publisher never throws back into this flow, so a Kafka outage can't fail the create.
-        // Consumers (Day 26+: inventory, payment, notifications) react to this event on their own schedule.
-        events.publishOrderPlaced(saved);
+        // Day 30 — announce the order, choosing the delivery mechanism by config:
+        //   • outbox ON  — outbox.append records the OrderPlaced into the outbox table IN THIS SAME
+        //                  transaction (returns true); the OutboxRelay publishes it to Kafka afterwards. State
+        //                  and event commit atomically — the reliable path.
+        //   • outbox OFF — append() returns false, so we fall back to Day 25's direct, fire-and-forget publish:
+        //                  the publisher never throws back into this flow, so a Kafka outage can't fail the
+        //                  create. Consumers (Day 26+: inventory, payment, orchestrator) react on their own time.
+        if (!outbox.append(saved)) {
+            events.publishOrderPlaced(saved);
+        }
         return saved;
     }
 

@@ -275,6 +275,27 @@ orderhub:
     replies-topic: saga-replies
     consumer-group-id: order-orchestrator
 
+  # Day 30 — the TRANSACTIONAL OUTBOX, bound onto OutboxProperties (prefix "orderhub.outbox"). This is the
+  # RELIABLE replacement for Day 25's direct dual-write: with it ON, placeOrder writes the OrderPlaced event
+  # into the outbox_event table IN THE SAME transaction as the order (so state + event commit atomically), and
+  # the @Scheduled OutboxRelay publishes the unsent rows to Kafka and marks them sent — no event can be lost.
+  #   enabled          — master switch for the same-tx outbox WRITE. DEFAULTS OFF so the service behaves exactly
+  #                      as on Day 25/29 (direct publish) unless the outbox is explicitly switched on; the relay
+  #                      is inert while it's off. Flip this on to adopt the reliable path.
+  #   topic            — the topic the relay publishes each row to; must match the OrderPlaced topic consumers
+  #                      subscribe to (order-placed).
+  #   aggregate-type   — the aggregate the recorded events are about ("Order"), stored on each row.
+  #   relay-enabled    — whether the relay POLLS for unsent rows (default true); can be paused independently.
+  #   relay-batch-size — max unsent rows drained per poll (oldest first), so one tick can't pull an unbounded backlog.
+  #   relay-poll-delay-ms — the fixed delay between relay polls (read directly by OutboxRelay's @Scheduled).
+  outbox:
+    enabled: false
+    topic: order-placed
+    aggregate-type: Order
+    relay-enabled: true
+    relay-batch-size: 200
+    relay-poll-delay-ms: 1000
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor
