@@ -3,7 +3,9 @@ package dev.dev48v.payment.config;
 import dev.dev48v.payment.events.OrderPlacedEvent;
 import dev.dev48v.payment.events.PaymentEventProperties;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -12,7 +14,13 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
+import org.springframework.kafka.core.DefaultKafkaProducerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
+import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -77,12 +85,43 @@ public class KafkaConsumerConfig {
     // The listener-container factory the @KafkaListener references by name. It runs the poll loop, hands each
     // record to onOrderPlaced, and commits offsets after successful processing. Typed to OrderPlacedEvent so the
     // listener method takes the event directly with no manual parsing.
+    // Day 31 — the shared DefaultErrorHandler is attached here so a record that keeps FAILING is retried with
+    // backoff and, once the attempts are exhausted, routed to the dead-letter topic instead of being dropped.
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, OrderPlacedEvent> orderEventListenerContainerFactory(
-            ConsumerFactory<String, OrderPlacedEvent> orderEventConsumerFactory) {
+            ConsumerFactory<String, OrderPlacedEvent> orderEventConsumerFactory,
+            DefaultErrorHandler kafkaErrorHandler) {
         ConcurrentKafkaListenerContainerFactory<String, OrderPlacedEvent> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(orderEventConsumerFactory);
+        factory.setCommonErrorHandler(kafkaErrorHandler);
         return factory;
+    }
+
+    // ---- Day 31: retry-with-backoff + dead-letter topic (DLT) --------------------------------------------
+    // The same one-place failure policy inventory-service got: retry a genuinely failing ("poison") record a
+    // bounded number of times, `retryBackoffMs` apart, then republish it to "<topic>.DLT" so it is parked for
+    // inspection/replay rather than dropped or looped. Retry count + backoff are externalized (payment.events.
+    // retry-*). This is for TECHNICAL failures only — a DECLINED payment is an EXPECTED business outcome the
+    // listener emits as a PaymentProcessed(DECLINED) event; it is never thrown, so it never reaches this
+    // handler and never lands on the DLT.
+    @Bean
+    public KafkaTemplate<Object, Object> deadLetterKafkaTemplate() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        config.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
+        config.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class);
+        config.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+        config.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 2000);
+        return new KafkaTemplate<>(new DefaultKafkaProducerFactory<>(config));
+    }
+
+    // FixedBackOff(interval, maxRetries): initial delivery + `retryAttempts` more, `retryBackoffMs` apart;
+    // when exhausted the recoverer sends the record to <topic>.DLT and the offset moves on.
+    @Bean
+    public DefaultErrorHandler kafkaErrorHandler(KafkaTemplate<Object, Object> deadLetterKafkaTemplate) {
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(deadLetterKafkaTemplate);
+        FixedBackOff backOff = new FixedBackOff(properties.retryBackoffMs(), properties.retryAttempts());
+        return new DefaultErrorHandler(recoverer, backOff);
     }
 }

@@ -34,6 +34,16 @@ public class ReservationLedger {
         return claimed.putIfAbsent(orderId, Boolean.TRUE) == null;
     }
 
+    // Day 31 — RELEASE a claim that was taken but whose processing then FAILED with an unexpected/technical
+    // error. Without this, the claim above would make every retry of that same record hit the duplicate-skip
+    // branch and return "successfully" — so the record would never actually be reprocessed and never reach the
+    // dead-letter topic. Un-claiming on failure keeps the idempotency guard honest: an order is "seen" only
+    // once it has genuinely been handled (success or a recorded business outcome), so a legitimate retry can
+    // run again and, if it keeps failing, be routed to the DLT.
+    public void unclaim(String orderId) {
+        claimed.remove(orderId);
+    }
+
     public void record(Reservation reservation) {
         reservations.put(reservation.orderId(), reservation);
     }

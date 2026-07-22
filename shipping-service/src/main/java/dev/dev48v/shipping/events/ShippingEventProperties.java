@@ -24,6 +24,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 //                           inventory-service's and payment-service's, so it gets its own independent copy of
 //                           every PaymentProcessed.
 //
+//   • retryAttempts       — Day 31: how many EXTRA deliveries a failing record gets after the first before it
+//                           is routed to the dead-letter topic. Total attempts = 1 + retryAttempts.
+//   • retryBackoffMs      — Day 31: how long (ms) the error handler waits between those retry attempts.
+//
 // @DefaultValue gives each field a safe fallback so the record always constructs even if the keys are absent.
 // Registered via @EnableConfigurationProperties(ShippingEventProperties.class) on KafkaConsumerConfig.
 @ConfigurationProperties(prefix = "shipping.events")
@@ -32,6 +36,8 @@ public record ShippingEventProperties(
         @DefaultValue("payment-events") String paymentEventsTopic,
         @DefaultValue("shipping-events") String shipmentEventsTopic,
         @DefaultValue("order-cancelled") String orderCancelledTopic,
-        @DefaultValue("shipping-service") String consumerGroupId
+        @DefaultValue("shipping-service") String consumerGroupId,
+        @DefaultValue("3") int retryAttempts,
+        @DefaultValue("500") long retryBackoffMs
 ) {
 }

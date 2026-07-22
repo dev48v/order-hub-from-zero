@@ -29,6 +29,11 @@ import java.math.BigDecimal;
 //   • declineCustomer    — a "test card": an order from this customer name is always DECLINED, so the decline
 //                          path is trivially reproducible regardless of amount.
 //
+//   RETRY / DEAD-LETTER (Day 31):
+//   • retryAttempts      — how many EXTRA deliveries a failing record gets after the first before it is routed
+//                          to the dead-letter topic. Total attempts = 1 + retryAttempts.
+//   • retryBackoffMs     — how long (ms) the error handler waits between those retry attempts.
+//
 // @DefaultValue gives each field a safe fallback so the record always constructs even if the keys are absent.
 // Registered via @EnableConfigurationProperties(PaymentEventProperties.class) on KafkaConsumerConfig.
 @ConfigurationProperties(prefix = "payment.events")
@@ -39,6 +44,8 @@ public record PaymentEventProperties(
         @DefaultValue("payment-service") String consumerGroupId,
         @DefaultValue("100.00") BigDecimal unitPrice,
         @DefaultValue("1000.00") BigDecimal declineThreshold,
-        @DefaultValue("DECLINE") String declineCustomer
+        @DefaultValue("DECLINE") String declineCustomer,
+        @DefaultValue("3") int retryAttempts,
+        @DefaultValue("500") long retryBackoffMs
 ) {
 }

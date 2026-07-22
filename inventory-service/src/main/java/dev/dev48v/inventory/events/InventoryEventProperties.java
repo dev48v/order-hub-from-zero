@@ -24,6 +24,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 //     share ONE group, so Kafka spreads each topic's partitions across them and each event is handled by
 //     exactly one instance (scale out = more instances in the same group). A DIFFERENT service that also
 //     wants OrderPlaced (payments, Day 27) uses its OWN group id and gets its own independent copy.
+//   • retryAttempts — Day 31: how many EXTRA deliveries a failing record gets after the first one before it
+//     is given up on and routed to the dead-letter topic. So total attempts = 1 + retryAttempts.
+//   • retryBackoffMs — Day 31: how long (ms) the error handler waits between those retry attempts.
 //
 // @DefaultValue gives each field a safe fallback so the record always constructs even if the keys are
 // absent. Registered via @EnableConfigurationProperties(InventoryEventProperties.class) on KafkaConsumerConfig.
@@ -33,6 +36,8 @@ public record InventoryEventProperties(
         @DefaultValue("order-placed") String orderPlacedTopic,
         @DefaultValue("inventory-events") String stockEventsTopic,
         @DefaultValue("order-cancelled") String orderCancelledTopic,
-        @DefaultValue("inventory-service") String consumerGroupId
+        @DefaultValue("inventory-service") String consumerGroupId,
+        @DefaultValue("3") int retryAttempts,
+        @DefaultValue("500") long retryBackoffMs
 ) {
 }

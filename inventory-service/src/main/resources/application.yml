@@ -87,6 +87,12 @@ inventory:
     stock-events-topic: inventory-events
     order-cancelled-topic: order-cancelled
     consumer-group-id: inventory-service
+    # Day 31 — retry-with-backoff + dead-letter policy for the consumers. A record that keeps FAILING with an
+    # unexpected error is retried retry-attempts times (retry-backoff-ms apart); once exhausted it is routed to
+    # "<topic>.DLT" instead of being dropped or looping the partition. Externalized so ops can retune per
+    # environment without a recompile.
+    retry-attempts: 3
+    retry-backoff-ms: 500
 
   # Day 29 — the ORCHESTRATION command handler, bound onto OrchestrationProperties (prefix
   # "inventory.orchestration"). ADDITIVE + opt-in beside the choreography consumer above: with it enabled,

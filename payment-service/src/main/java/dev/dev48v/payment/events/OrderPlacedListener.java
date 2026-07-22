@@ -58,18 +58,29 @@ public class OrderPlacedListener {
             return;
         }
 
-        // Derive the charge amount from the order line, then decide (approve/decline). Deterministic — no
-        // network, no business exception — so the listener never loops on a record.
-        BigDecimal amount = paymentService.amountFor(event.quantity());
-        Payment payment = paymentService.process(orderId, event.customer(), amount);
-        ledger.record(payment);
+        try {
+            // Derive the charge amount from the order line, then decide (approve/decline). Deterministic — no
+            // network, no business exception — so the listener never loops on a record. A DECLINE is a normal
+            // business OUTCOME emitted as a PaymentProcessed event below, NOT an error: it is never thrown and
+            // so never retried or dead-lettered.
+            BigDecimal amount = paymentService.amountFor(event.quantity());
+            Payment payment = paymentService.process(orderId, event.customer(), amount);
+            ledger.record(payment);
 
-        // ANSWER with an event: publish the result so downstream reactions (Day 28's saga, notifications,
-        // the order's status projection) can consume it. Publishing failures are swallowed inside the publisher.
-        PaymentProcessedEvent result = PaymentProcessedEvent.from(payment, event.eventId());
-        publisher.publish(result);
+            // ANSWER with an event: publish the result so downstream reactions (Day 28's saga, notifications,
+            // the order's status projection) can consume it. Publishing failures are swallowed in the publisher.
+            PaymentProcessedEvent result = PaymentProcessedEvent.from(payment, event.eventId());
+            publisher.publish(result);
 
-        log.info("Payment {} for order {} ({} {}) - reason {}",
-                payment.getStatus(), orderId, amount, payment.getReason(), result.eventId());
+            log.info("Payment {} for order {} ({} {}) - reason {}",
+                    payment.getStatus(), orderId, amount, payment.getReason(), result.eventId());
+        } catch (RuntimeException ex) {
+            // Day 31 — a TECHNICAL/unexpected failure (a gateway/serialization/bug fault, NOT a decline).
+            // Release the idempotency claim so the retry re-processes, then RETHROW so the DefaultErrorHandler
+            // retries with backoff and, once exhausted, routes the record to order-placed.DLT instead of
+            // swallowing it or looping the partition.
+            ledger.unclaim(orderId);
+            throw ex;
+        }
     }
 }

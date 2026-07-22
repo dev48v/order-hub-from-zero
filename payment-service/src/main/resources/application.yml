@@ -64,6 +64,11 @@ payment:
     unit-price: 100.00
     decline-threshold: 1000.00
     decline-customer: DECLINE
+    # Day 31 — retry-with-backoff + dead-letter policy: a record that keeps FAILING with an unexpected error is
+    # retried retry-attempts times (retry-backoff-ms apart), then routed to "<topic>.DLT". A DECLINED payment is
+    # a normal business outcome (emitted as an event), never an error, so it is never retried or dead-lettered.
+    retry-attempts: 3
+    retry-backoff-ms: 500
 
   # Day 29 — the ORCHESTRATION command handler, bound onto OrchestrationProperties (prefix
   # "payment.orchestration"). ADDITIVE + opt-in beside the choreography consumer above: with it enabled,

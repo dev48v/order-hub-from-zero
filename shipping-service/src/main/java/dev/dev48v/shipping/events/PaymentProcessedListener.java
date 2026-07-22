@@ -64,26 +64,37 @@ public class PaymentProcessedListener {
             return;
         }
 
-        if (event.isApproved()) {
-            // HAPPY PATH: payment approved (and stock was reserved upstream on OrderPlaced) -> the order is
-            // fulfilled. Mark it CONFIRMED and SHIP it, then announce the fact so anyone downstream can react.
-            Shipment shipment = Shipment.shipped(orderId, event.customer(), event.amount());
-            ledger.record(shipment);
-            publisher.publishShipmentScheduled(ShipmentScheduledEvent.from(shipment, event.eventId()));
-            log.info("Order {} CONFIRMED and shipped ({}) - amount {}, tracing {}",
-                    orderId, shipment.getTrackingNumber(), event.amount(), event.eventId());
-        } else {
-            // COMPENSATION PATH: payment declined -> the order cannot be fulfilled, but stock was already
-            // reserved. Mark the order CANCELLED and emit the COMPENSATING event so inventory-service RELEASES
-            // the reserved stock. No distributed rollback — just a fact that triggers the undo.
-            Shipment shipment = Shipment.cancelled(orderId, event.customer(), event.reason());
-            ledger.record(shipment);
-            publisher.publishOrderCancelled(
-                    OrderCancelledEvent.forDeclinedPayment(orderId, event.customer(), event.reason(),
-                            event.eventId()));
-            log.warn("Order {} payment DECLINED ({}) - COMPENSATING: order CANCELLED, emitting OrderCancelled "
-                    + "so inventory-service releases the reserved stock (tracing {})",
-                    orderId, event.reason(), event.eventId());
+        try {
+            if (event.isApproved()) {
+                // HAPPY PATH: payment approved (and stock was reserved upstream on OrderPlaced) -> the order is
+                // fulfilled. Mark it CONFIRMED and SHIP it, then announce the fact so anyone downstream reacts.
+                Shipment shipment = Shipment.shipped(orderId, event.customer(), event.amount());
+                ledger.record(shipment);
+                publisher.publishShipmentScheduled(ShipmentScheduledEvent.from(shipment, event.eventId()));
+                log.info("Order {} CONFIRMED and shipped ({}) - amount {}, tracing {}",
+                        orderId, shipment.getTrackingNumber(), event.amount(), event.eventId());
+            } else {
+                // COMPENSATION PATH: payment declined -> the order cannot be fulfilled, but stock was already
+                // reserved. Mark the order CANCELLED and emit the COMPENSATING event so inventory-service
+                // RELEASES the reserved stock. This is an EXPECTED business OUTCOME, not an error: it is never
+                // thrown, so it is never retried or dead-lettered. No distributed rollback — just a fact that
+                // triggers the undo.
+                Shipment shipment = Shipment.cancelled(orderId, event.customer(), event.reason());
+                ledger.record(shipment);
+                publisher.publishOrderCancelled(
+                        OrderCancelledEvent.forDeclinedPayment(orderId, event.customer(), event.reason(),
+                                event.eventId()));
+                log.warn("Order {} payment DECLINED ({}) - COMPENSATING: order CANCELLED, emitting OrderCancelled "
+                        + "so inventory-service releases the reserved stock (tracing {})",
+                        orderId, event.reason(), event.eventId());
+            }
+        } catch (RuntimeException ex) {
+            // Day 31 — a TECHNICAL/unexpected failure (NOT a decline: that is the compensation branch above).
+            // Release the idempotency claim so the retry re-processes, then RETHROW so the DefaultErrorHandler
+            // retries with backoff and, once exhausted, routes the record to payment-events.DLT instead of
+            // swallowing it or looping the partition.
+            ledger.unclaim(orderId);
+            throw ex;
         }
     }
 }

@@ -36,6 +36,14 @@ public class ShipmentLedger {
         return claimed.putIfAbsent(orderId, Boolean.TRUE) == null;
     }
 
+    // Day 31 — RELEASE a claim whose processing then FAILED with an unexpected/technical error, so a
+    // legitimate retry can re-process the same record instead of hitting the duplicate-skip branch above (which
+    // would make the failure look "handled" and keep it off the dead-letter topic). An order is "settled" only
+    // once it has genuinely been shipped or compensated — not merely because a first, failed attempt claimed it.
+    public void unclaim(String orderId) {
+        claimed.remove(orderId);
+    }
+
     public void record(Shipment shipment) {
         shipments.put(shipment.getOrderId(), shipment);
     }

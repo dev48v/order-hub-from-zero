@@ -35,6 +35,14 @@ public class PaymentLedger {
         return claimed.putIfAbsent(orderId, Boolean.TRUE) == null;
     }
 
+    // Day 31 — RELEASE a claim whose processing then FAILED with an unexpected/technical error, so a
+    // legitimate retry can re-process the same record instead of hitting the duplicate-skip branch above (which
+    // would make the failure look "handled" and keep it off the dead-letter topic). An order is "seen" only
+    // once it has genuinely been charged or recorded — not merely because a first, failed attempt claimed it.
+    public void unclaim(String orderId) {
+        claimed.remove(orderId);
+    }
+
     public void record(Payment payment) {
         payments.put(payment.getOrderId(), payment);
     }

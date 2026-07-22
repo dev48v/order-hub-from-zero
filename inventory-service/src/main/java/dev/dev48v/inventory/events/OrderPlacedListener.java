@@ -59,34 +59,46 @@ public class OrderPlacedListener {
             return;
         }
 
-        Reservation reservation;
         try {
-            // The reaction: reserve `quantity` units of the ordered SKU. This is the same domain call
-            // the Feign endpoint used to invoke — now driven by an event instead of an HTTP request.
-            StockItem item = inventoryService.reserve(event.item(), event.quantity());
-            reservation = Reservation.reserved(orderId, event.eventId(), event.item(),
-                    event.quantity(), item.available());
-            log.info("Reserved {} x {} for order {} - {} units remaining",
-                    event.quantity(), event.item(), orderId, item.available());
-        } catch (InsufficientStockException e) {
-            // GRACEFUL: not enough on hand. Do NOT rethrow (that would make the container redeliver this
-            // record forever). Record the outcome and move on; the saga compensates off this mark.
-            reservation = Reservation.failed(orderId, event.eventId(), event.item(),
-                    event.quantity(), "INSUFFICIENT_STOCK");
-            log.warn("Insufficient stock to reserve {} x {} for order {}: {}",
-                    event.quantity(), event.item(), orderId, e.getMessage());
-        } catch (UnknownSkuException e) {
-            // GRACEFUL: the order names a SKU this service doesn't stock. Same policy — mark, don't crash.
-            reservation = Reservation.failed(orderId, event.eventId(), event.item(),
-                    event.quantity(), "UNKNOWN_SKU");
-            log.warn("Unknown SKU '{}' on order {} - cannot reserve", event.item(), orderId);
-        }
+            Reservation reservation;
+            try {
+                // The reaction: reserve `quantity` units of the ordered SKU. This is the same domain call
+                // the Feign endpoint used to invoke — now driven by an event instead of an HTTP request.
+                StockItem item = inventoryService.reserve(event.item(), event.quantity());
+                reservation = Reservation.reserved(orderId, event.eventId(), event.item(),
+                        event.quantity(), item.available());
+                log.info("Reserved {} x {} for order {} - {} units remaining",
+                        event.quantity(), event.item(), orderId, item.available());
+            } catch (InsufficientStockException e) {
+                // GRACEFUL BUSINESS OUTCOME: not enough on hand. Do NOT rethrow — this is an EXPECTED result,
+                // not a technical failure, so it must never be retried or land on the DLT. Record it and move
+                // on; the saga compensates off this mark.
+                reservation = Reservation.failed(orderId, event.eventId(), event.item(),
+                        event.quantity(), "INSUFFICIENT_STOCK");
+                log.warn("Insufficient stock to reserve {} x {} for order {}: {}",
+                        event.quantity(), event.item(), orderId, e.getMessage());
+            } catch (UnknownSkuException e) {
+                // GRACEFUL BUSINESS OUTCOME: the order names a SKU this service doesn't stock. Same policy —
+                // an expected result, mark it, don't crash and don't dead-letter.
+                reservation = Reservation.failed(orderId, event.eventId(), event.item(),
+                        event.quantity(), "UNKNOWN_SKU");
+                log.warn("Unknown SKU '{}' on order {} - cannot reserve", event.item(), orderId);
+            }
 
-        // Record the outcome in the ledger, then Day 28: ANSWER with a StockReserved event so the choreography
-        // saga hears the result — RESERVED completes the stock leg, a failure lets the saga compensate. The
-        // publish runs exactly once per order (we returned early on a duplicate claim above) and swallows its
-        // own errors, so it can never crash or loop the consumer.
-        ledger.record(reservation);
-        publisher.publish(StockReservedEvent.from(reservation));
+            // Record the outcome in the ledger, then Day 28: ANSWER with a StockReserved event so the
+            // choreography saga hears the result — RESERVED completes the stock leg, a failure lets the saga
+            // compensate. The publish runs exactly once per order (we returned early on a duplicate claim
+            // above) and swallows its own errors, so it can never crash or loop the consumer.
+            ledger.record(reservation);
+            publisher.publish(StockReservedEvent.from(reservation));
+        } catch (RuntimeException ex) {
+            // Day 31 — a TECHNICAL/unexpected failure (NOT a business outcome: those are caught above and
+            // never reach here). Release the idempotency claim so the retry can genuinely re-process this
+            // record, then RETHROW so the container's DefaultErrorHandler retries it with backoff and, once
+            // the attempts are exhausted, routes it to the order-placed.DLT dead-letter topic instead of
+            // silently swallowing the failure or looping the partition.
+            ledger.unclaim(orderId);
+            throw ex;
+        }
     }
 }
