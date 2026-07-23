@@ -27,6 +27,36 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
+  # Day 32 — persistence for the EXACTLY-ONCE consumer (see orderhub.exactly-once below). Inventory was
+  # in-memory through Day 31; the exactly-once path needs a real DB so the stock reservation and the
+  # processed-message dedup marker can commit in ONE local transaction. Local/dev/tests run on an in-memory
+  # H2 (no Docker, no external DB); production points these at a real server via env vars, exactly like
+  # order-service. When orderhub.exactly-once.enabled=false (the default), this DB simply initialises and
+  # sits idle — the Day-26 in-memory listener remains the only consumer, so behaviour is unchanged.
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:h2:mem:inventory;DB_CLOSE_DELAY=-1}
+    driver-class-name: ${SPRING_DATASOURCE_DRIVER:org.h2.Driver}
+    username: ${SPRING_DATASOURCE_USERNAME:sa}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+
+  # Flyway OWNS the schema: on startup it runs db/migration/V*.sql in order and records each in
+  # flyway_schema_history so it never re-runs — the same tables on H2 and PostgreSQL.
+  flyway:
+    enabled: true
+
+  jpa:
+    hibernate:
+      # Flyway creates the tables, so Hibernate must NOT touch the schema — "validate" only checks the
+      # entities map onto the migrated tables/columns and fails fast on any mismatch.
+      ddl-auto: validate
+    # Keep the persistence boundary inside the service/processor layer, not the whole request.
+    open-in-view: false
+
+  # H2's web console stays off — the app talks to the DB only through JPA.
+  h2:
+    console:
+      enabled: false
+
 server:
   # Each service takes its own local port so they can all run on one machine: the api-gateway (the
   # public front door) owns 8080, inventory-service takes 8081, order-service sits on 8082. In a
@@ -104,6 +134,21 @@ inventory:
     commands-topic: saga-commands
     replies-topic: saga-replies
     consumer-group-id: inventory-orchestration
+
+# Day 32 — the EXACTLY-ONCE (effectively-once) consumer. OPT-IN and OFF by default: with enabled=false the
+# ExactlyOnceConsumer's @KafkaListener never starts (its autoStartup is bound to this flag), so the shipped
+# Day-26 in-memory listener above remains the only consumer and nothing about message processing changes.
+# Flip enabled=true to run the DB-backed path instead: it consumes OrderPlaced, reserves stock in the
+# stock_levels table, and writes a processed_events dedup marker keyed by (topic, partition, offset) — all in
+# ONE database transaction — then commits the Kafka offset MANUALLY only after that transaction commits. A
+# redelivery after a crash is detected via the marker and skipped, so the reservation happens exactly once.
+#   order-placed-topic  — the topic to consume (same fact order-service publishes / the Day-26 listener reads).
+#   consumer-group-id   — this path's OWN Kafka group, distinct from inventory.events.consumer-group-id.
+orderhub:
+  exactly-once:
+    enabled: false
+    order-placed-topic: order-placed
+    consumer-group-id: inventory-exactly-once
 
 # Actuator: expose just the health endpoint so the service is independently observable. Every
 # service reports its OWN health — a core reason to split (you can see and scale each piece alone).

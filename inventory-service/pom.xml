@@ -71,6 +71,39 @@
       <artifactId>spring-cloud-starter-config</artifactId>
     </dependency>
 
+    <!-- Day 32: persistence, for the EXACTLY-ONCE consumer only. Until now inventory-service was
+         deliberately in-memory (Day 17) — its idempotency ledger (Day 26) lived in a ConcurrentHashMap,
+         which a restart wipes. Day 32 ships the production-shaped version: a processed-message dedup store
+         written in the SAME local DB transaction as the business effect (the stock reservation), so a
+         Kafka redelivery after a crash is DETECTED and SKIPPED. That needs JPA + a real database + Flyway
+         to own the schema — exactly the stack order-service has used since Day 2/3. It stays OPT-IN behind
+         orderhub.exactly-once.enabled (default false): when off, the Day-26 in-memory listener remains the
+         only consumer and behaviour is unchanged; the DB simply initialises dormant. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+    </dependency>
+
+    <!-- Flyway OWNS the dedup schema: on startup it runs db/migration/V*.sql in version order and records
+         each in flyway_schema_history so it never re-runs — the same tables, same order, on H2 (local/tests)
+         and PostgreSQL (prod). ddl-auto stays `validate` (application.yml) so Hibernate never touches the
+         schema, only checks the entities map onto Flyway's tables. flyway-core alone covers H2 + Postgres at
+         this project's scale (order-service adds flyway-database-postgresql only for its prod Postgres). -->
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+    </dependency>
+
+    <!-- H2 — the embedded database. Local/dev/test run entirely on an in-memory H2 (no Docker, no external
+         DB), so `mvn` and a bare `java -jar` boot with a working dedup store out of the box; production
+         points spring.datasource at a real server via env vars, exactly like order-service. Provided in the
+         normal (runtime) scope so it is present both when the app runs and when the tests boot the context. -->
+    <dependency>
+      <groupId>com.h2database</groupId>
+      <artifactId>h2</artifactId>
+      <scope>runtime</scope>
+    </dependency>
+
     <!-- Day 26: Spring for Apache Kafka — the CONSUMER side. Phase 4 turns OrderHub event-driven;
          Day 25 made order-service PUBLISH an OrderPlaced event, and today inventory-service SUBSCRIBES
          to that "order-placed" topic and reserves stock in reaction — with zero change to order-service.
