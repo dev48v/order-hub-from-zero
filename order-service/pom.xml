@@ -49,7 +49,27 @@
          enqueues canned responses, points inventory.service.url at the server's port, and asserts on the
          requests Feign actually sent. Pinned explicitly — the Spring Boot parent doesn't manage it. -->
     <mockwebserver.version>4.12.0</mockwebserver.version>
+    <!-- Day 33: Apache Avro — the binary, schema-driven serialization format for the event CONTRACT. The
+         avro-maven-plugin (below) compiles src/main/avro/*.avsc into generated SpecificRecord classes, and
+         the runtime jar decodes/encodes them. 1.11.3 is the line Confluent 7.6.x is built against, so the
+         two agree on the Avro runtime. -->
+    <avro.version>1.11.3</avro.version>
+    <!-- Day 33: Confluent Platform client libraries — the schema-registry integration. 7.6.x targets the
+         Kafka 3.x line this Spring Boot 3.3 project runs and ships the KafkaAvroSerializer/Deserializer,
+         the CachedSchemaRegistryClient (real registry) and the MockSchemaRegistryClient (mock:// in tests).
+         Pulled from the Confluent Maven repo declared below (they are not on Maven Central). -->
+    <confluent.version>7.6.1</confluent.version>
   </properties>
+
+  <!-- Day 33: the Confluent Maven repository. The kafka-avro-serializer + kafka-schema-registry-client
+       artifacts are published here, NOT on Maven Central, so this repo must be declared for them to resolve. -->
+  <repositories>
+    <repository>
+      <id>confluent</id>
+      <name>Confluent</name>
+      <url>https://packages.confluent.io/maven/</url>
+    </repository>
+  </repositories>
 
   <!-- Day 9: the Testcontainers BOM keeps junit-jupiter + postgresql on one coherent version.
        Declared here (ahead of the Spring Boot parent's dependency management) so testcontainers.version
@@ -236,6 +256,48 @@
       <artifactId>spring-kafka</artifactId>
     </dependency>
 
+    <!-- Day 33: Apache Avro runtime — the generated OrderPlaced SpecificRecord extends SpecificRecordBase from
+         here, and the encode/decode at (de)serialization time runs through this library. Version pinned to the
+         one Confluent 7.6.x is built against (avro.version). -->
+    <dependency>
+      <groupId>org.apache.avro</groupId>
+      <artifactId>avro</artifactId>
+      <version>${avro.version}</version>
+    </dependency>
+
+    <!-- Day 33: Confluent's Avro (de)serializers for Kafka — KafkaAvroSerializer / KafkaAvroDeserializer. They
+         register the writer schema in the schema registry, put a compact id + binary Avro on the wire, and
+         decode by fetching the schema back by id. Pulls in kafka-schema-registry-client transitively. We EXCLUDE
+         kafka-clients so the version Spring Boot manages (via spring-kafka) wins — the serializers only use the
+         stable Serializer/Deserializer interfaces, so no downgrade is needed or wanted. -->
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-avro-serializer</artifactId>
+      <version>${confluent.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.kafka</groupId>
+          <artifactId>kafka-clients</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
+    <!-- Day 33: the schema-registry CLIENT — CachedSchemaRegistryClient talks to a real registry over HTTP;
+         MockSchemaRegistryClient (+ the mock:// URL scheme) is the in-JVM stand-in the tests use so no external
+         registry has to run. Declared explicitly (it also arrives transitively via kafka-avro-serializer) so the
+         dependency is visible and stable; kafka-clients excluded for the same reason as above. -->
+    <dependency>
+      <groupId>io.confluent</groupId>
+      <artifactId>kafka-schema-registry-client</artifactId>
+      <version>${confluent.version}</version>
+      <exclusions>
+        <exclusion>
+          <groupId>org.apache.kafka</groupId>
+          <artifactId>kafka-clients</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+
     <!-- Day 3: Flyway — versioned, checked-in SQL migrations. Replaces Hibernate's
          ddl-auto with explicit, reviewable schema changes that run identically on
          H2 (local) and PostgreSQL (prod). -->
@@ -326,6 +388,32 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+
+      <!-- Day 33: the Avro code generator. In the generate-sources phase it reads every .avsc under
+           src/main/avro and generates the matching SpecificRecord Java class into target/generated-sources/avro
+           (added to the compile source roots automatically), so dev.dev48v.orderhub.avro.OrderPlaced exists at
+           compile time from the schema alone — no hand-written, drift-prone POJO. stringType=String makes the
+           generated getters return java.lang.String (not Avro's Utf8/CharSequence), which is what the rest of
+           the code expects. -->
+      <plugin>
+        <groupId>org.apache.avro</groupId>
+        <artifactId>avro-maven-plugin</artifactId>
+        <version>${avro.version}</version>
+        <executions>
+          <execution>
+            <id>generate-avro-sources</id>
+            <phase>generate-sources</phase>
+            <goals>
+              <goal>schema</goal>
+            </goals>
+            <configuration>
+              <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
+              <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+              <stringType>String</stringType>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

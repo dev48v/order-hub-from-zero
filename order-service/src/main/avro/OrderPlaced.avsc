@@ -1,0 +1,16 @@
+{
+  "namespace": "dev.dev48v.orderhub.avro",
+  "type": "record",
+  "name": "OrderPlaced",
+  "doc": "Day 33 - the OrderPlaced domain event as an Avro CONTRACT (schema v1). This .avsc is the single source of truth for the event's shape; the avro-maven-plugin generates the dev.dev48v.orderhub.avro.OrderPlaced SpecificRecord from it at build time. Kafka's schema registry stores this schema under a subject and versions it, so every producer and consumer agrees on exactly these fields and evolution is checked for compatibility instead of silently breaking a consumer.",
+  "fields": [
+    { "name": "eventId",  "type": "string", "doc": "unique id of this event emission (idempotency / exactly-once)" },
+    { "name": "orderId",  "type": "string", "doc": "which order this is about - also the Kafka message key" },
+    { "name": "customer", "type": "string", "doc": "who placed the order" },
+    { "name": "item",     "type": "string", "doc": "the item ordered == the inventory SKU to reserve against" },
+    { "name": "quantity", "type": "int",    "doc": "how many units were ordered" },
+    { "name": "status",   "type": "string", "doc": "the order's status at emit time (PLACED)" },
+    { "name": "placedAt",  "type": "long", "doc": "epoch millis when the order was created (order.createdAt)" },
+    { "name": "occurredAt","type": "long", "doc": "epoch millis when this event was produced" }
+  ]
+}
