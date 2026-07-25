@@ -7,42 +7,42 @@
      31 teal · 32 rose · 33 indigo · 34 emerald · 35 amber · 36 sky · 37 violet · 38 coral · 39 lime · 40 cyan ·
      41 magenta · 42 orange · 43 mint · 44 ruby · 45 cobalt · 46 chartreuse · 47 plum · 48 tangerine · 49 aqua · 50 gold.
      Each OrderHub run recolours ALL colour tokens to that day's hue + moves the .next highlight to the current day. -->
-<!-- THIS FILE: day-33  ·  INDIGO  ·  primary #6366f1  ·  calendar as of Day 33 shipping. -->
+<!-- THIS FILE: day-34  ·  EMERALD  ·  primary #10b981  ·  calendar as of Day 34 shipping. -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100vw; height: 100vh; }
-  /* ===== DAY 33 · INDIGO ===== */
-  body { background: linear-gradient(135deg, #08092b, #0a0b3d 55%, #08092b);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #cdcdf9; overflow: hidden; position: relative;
+  /* ===== DAY 34 · EMERALD ===== */
+  body { background: linear-gradient(135deg, #082b1f, #0a3d2c 55%, #082b1f);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #cdf9eb; overflow: hidden; position: relative;
     padding: 2.8vh 3.6vw 3.4vh; display: flex; flex-direction: column; }
 
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
-  .series-badge { display: inline-block; background: linear-gradient(90deg, #0b0d7a, #6366f1); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
-  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #989af6, #6366f1); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
-  .sub { font-size: 17px; font-weight: 700; color: #ecedfd; margin-top: 6px; }
-  .tagline { font-size: 13.5px; color: #575af0; margin-top: 3px; }
+  .series-badge { display: inline-block; background: linear-gradient(90deg, #0b7a55, #10b981); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
+  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #98f6d7, #10b981); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
+  .sub { font-size: 17px; font-weight: 700; color: #ecfdf8; margin-top: 6px; }
+  .tagline { font-size: 13.5px; color: #56f0bd; margin-top: 3px; }
   .tag-col { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; padding-top: 4px; }
-  .tag { background: rgba(99, 102, 241,0.12); border: 1px solid rgba(99, 102, 241,0.38); color: #575af0; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 8px; }
+  .tag { background: rgba(16, 185, 129,0.12); border: 1px solid rgba(16, 185, 129,0.38); color: #56f0bd; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 8px; }
 
   /* calendar — Days 31-50 : 5 cols x 4 rows = 20 (big readable cells) */
-  .cal-title { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #575af0; margin: 13px 0 9px; }
+  .cal-title { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #56f0bd; margin: 13px 0 9px; }
   .cal { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(4, 1fr); gap: 9px; }
-  .day { background: rgba(10, 11, 51, 0.45); border: 1px solid rgba(99, 102, 241,0.16); border-radius: 10px; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
-  .day .d { font-size: 11.5px; font-weight: 800; color: #383a89; letter-spacing: 0.4px; }
-  .day .t { font-size: 16px; font-weight: 700; color: #d2d2f9; line-height: 1.12; }
-  .day.next { background: linear-gradient(135deg, #0d1096, #6366f1); border-color: #151aea; }
+  .day { background: rgba(10, 51, 38, 0.45); border: 1px solid rgba(16, 185, 129,0.16); border-radius: 10px; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+  .day .d { font-size: 11.5px; font-weight: 800; color: #388a6f; letter-spacing: 0.4px; }
+  .day .t { font-size: 16px; font-weight: 700; color: #d2f9ec; line-height: 1.12; }
+  .day.next { background: linear-gradient(135deg, #0d9669, #10b981); border-color: #14eba4; }
   .day.next .d { color: rgba(255,255,255,0.92); }
   .day.next .t { color: #fff; }
-  .day.phase { border-left: 3px solid #151aea; background: rgba(99, 102, 241,0.12); }
-  .day.phase .d { color: #575af0; }
+  .day.phase { border-left: 3px solid #14eba4; background: rgba(16, 185, 129,0.12); }
+  .day.phase .d { color: #56f0bd; }
 
   .foot { margin-top: 13px; display: flex; justify-content: space-between; align-items: center; }
-  .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: #575af0; font-weight: 600; }
+  .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: #56f0bd; font-weight: 600; }
   .legend .sw { display: inline-block; width: 13px; height: 13px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
-  .sw.n { background: linear-gradient(135deg, #0d1096, #6366f1); }
-  .sw.p { background: rgba(99, 102, 241,0.12); border-left: 3px solid #151aea; }
-  .url { font-size: 14px; color: #383a89; font-weight: 600; }
-  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #0b0d7a, #6366f1, #0b0d7a); }
+  .sw.n { background: linear-gradient(135deg, #0d9669, #10b981); }
+  .sw.p { background: rgba(16, 185, 129,0.12); border-left: 3px solid #14eba4; }
+  .url { font-size: 14px; color: #388a6f; font-weight: 600; }
+  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #0b7a55, #10b981, #0b7a55); }
 </style>
 </head>
 <body>
@@ -64,8 +64,8 @@
   <div class="cal">
     <div class="day"><div class="d">DAY 31 ✓</div><div class="t">Dead-letter + retry/backoff</div></div>
     <div class="day"><div class="d">DAY 32 ✓</div><div class="t">Exactly-once consumers</div></div>
-    <div class="day next"><div class="d">DAY 33 ✓</div><div class="t">Schema registry + Avro</div></div>
-    <div class="day phase"><div class="d">DAY 34 · SECURITY</div><div class="t">Spring Security basics</div></div>
+    <div class="day"><div class="d">DAY 33 ✓</div><div class="t">Schema registry + Avro</div></div>
+    <div class="day next phase"><div class="d">DAY 34 ✓ · SECURITY</div><div class="t">Spring Security basics</div></div>
     <div class="day"><div class="d">DAY 35</div><div class="t">JWT issue + validate</div></div>
 
     <div class="day"><div class="d">DAY 36</div><div class="t">OAuth2 / OIDC</div></div>
