@@ -107,6 +107,19 @@
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
 
+    <!-- Day 34: Spring Security — Phase 5 (SECURITY) begins. This starter puts Spring Security's servlet
+         filter chain in front of every request and brings the building blocks we use today: HTTP Basic
+         authentication, a UserDetailsService, BCrypt password hashing and role-based authorization
+         (authorizeHttpRequests). It is gated behind orderhub.security.enabled (default FALSE): when off,
+         SecurityConfig installs a permit-all filter chain so every prior endpoint and test behaves EXACTLY
+         as before; when on, reads require ROLE_USER, writes require ROLE_ADMIN, and actuator health + the
+         OpenAPI docs stay public. Defining our own UserDetailsService also switches off Boot's default
+         generated-password user. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+
     <!-- Day 11: Spring Data Redis — the cache backend. This starter pulls in Spring Data Redis
          and the Lettuce client (a modern, Netty-based, thread-safe connection pool), so a single
          RedisConnectionFactory can back Spring's caching abstraction. We drive it purely through
@@ -330,6 +343,17 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 34: Spring Security Test — the test-support module. It brings SecurityMockMvcRequestPostProcessors
+         (httpBasic(user, pass) to send real Basic-auth credentials on a MockMvc request) and @WithMockUser,
+         so the security slice test can assert the whole authN/authZ contract: 401 with no credentials, 403
+         when a USER hits an ADMIN-only write endpoint, and 200/201 with the right role. Version is managed by
+         the Spring Boot parent. Test scope only. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
       <scope>test</scope>
     </dependency>
 

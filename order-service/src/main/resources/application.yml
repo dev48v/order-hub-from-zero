@@ -296,6 +296,16 @@ orderhub:
     relay-batch-size: 200
     relay-poll-delay-ms: 1000
 
+  # Day 34 — SPRING SECURITY (Phase 5 begins), bound onto OrderSecurityProperties (prefix "orderhub.security").
+  #   enabled — master switch. DEFAULTS OFF so every prior endpoint and test behaves EXACTLY as before: with
+  #             it off SecurityConfig installs a permit-all filter chain (the security starter is present but
+  #             inert). Flip it on to require HTTP Basic authentication against the in-memory demo users —
+  #             reads (GET /api/**) need ROLE_USER, writes (POST/PUT/PATCH/DELETE /api/**) need ROLE_ADMIN,
+  #             while actuator health and the OpenAPI docs stay public. Passwords are BCrypt-hashed in memory,
+  #             never plaintext at rest. Overridable per profile / via env var (ORDERHUB_SECURITY_ENABLED).
+  security:
+    enabled: false
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor

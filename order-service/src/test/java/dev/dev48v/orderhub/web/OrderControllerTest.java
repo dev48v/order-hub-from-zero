@@ -1,6 +1,7 @@
 package dev.dev48v.orderhub.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.dev48v.orderhub.config.SecurityConfig;
 import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.domain.OrderStatus;
 import dev.dev48v.orderhub.service.OrderNotFoundException;
@@ -30,8 +31,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 // @MockBean so we drive each endpoint's behaviour and assert the HTTP contract: status codes,
 // headers, JSON body and the RFC-7807 error shape. ApiExceptionHandler is imported explicitly
 // so the slice maps domain exceptions to the right statuses (404 / 409).
+//
+// Day 34 — SecurityConfig is imported too. Now that spring-boot-starter-security is on the classpath, a
+// @WebMvcTest slice would otherwise get Spring Boot's DEFAULT secure-everything chain (401/403 on every
+// call). Importing our SecurityConfig gives the slice the real chain instead: with orderhub.security.enabled
+// defaulting to false, that's the permit-all OPEN chain, so every assertion below is byte-for-byte the same
+// as before security existed. (The secured chain is exercised separately in OrderSecurityTest.)
 @WebMvcTest(OrderController.class)
-@Import(ApiExceptionHandler.class)
+@Import({ApiExceptionHandler.class, SecurityConfig.class})
 class OrderControllerTest {
 
     @Autowired
