@@ -306,6 +306,21 @@ orderhub:
   security:
     enabled: false
 
+    # Day 35 — STATELESS JWT authentication (nested under orderhub.security.jwt). When enabled, the JWT
+    # filter chain (JwtSecurityConfig) REPLACES the Day-34 Basic chain: the client logs in once at
+    # POST /auth/login to receive a short-lived, HS256-signed token, then presents it as
+    # "Authorization: Bearer <token>" on every call — no session, no per-request password. The SAME role
+    # rules apply (reads → ROLE_USER, writes → ROLE_ADMIN; /auth/login + actuator health + docs public);
+    # a missing / invalid / expired / tampered token → 401, a wrong-role token → 403.
+    #   enabled — master switch, DEFAULTS OFF so the app and every prior test behave exactly as on Day 34.
+    #   secret  — the HS256 signing key. Sourced from ${JWT_SECRET} so it is NEVER committed; the dev
+    #             fallback is >= 32 bytes (256 bits), the minimum HS256 needs. Set JWT_SECRET in real envs.
+    #   expiry  — token lifetime (short by design; a leaked token is only useful until it expires).
+    jwt:
+      enabled: false
+      secret: ${JWT_SECRET:dev-only-insecure-jwt-secret-change-me-32bytes+}
+      expiry: 15m
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor

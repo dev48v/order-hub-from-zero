@@ -1,6 +1,6 @@
 package dev.dev48v.orderhub.config;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -73,9 +73,12 @@ public class SecurityConfig {
         return new InMemoryUserDetailsManager(user, admin);
     }
 
-    // enabled=true → the REAL chain. HTTP Basic + role-based authorization.
+    // enabled=true (and JWT off) → the Day-34 REAL chain: HTTP Basic + role-based authorization.
+    // Day 35: this chain backs off when orderhub.security.jwt.enabled=true, so the stateless JWT chain
+    // (JwtSecurityConfig) is the single active chain then. The condition is an expression because it spans
+    // two keys; with jwt.enabled defaulting false, the Day-34 behaviour (enabled=true → Basic) is unchanged.
     @Bean
-    @ConditionalOnProperty(prefix = "orderhub.security", name = "enabled", havingValue = "true")
+    @ConditionalOnExpression("'${orderhub.security.enabled:false}' == 'true' and '${orderhub.security.jwt.enabled:false}' == 'false'")
     public SecurityFilterChain securedFilterChain(HttpSecurity http) throws Exception {
         http
                 // CSRF protection defends browser form/session flows against cross-site POSTs; this is a
@@ -102,8 +105,10 @@ public class SecurityConfig {
 
     // enabled=false (DEFAULT) → the OPEN chain. Permit everything, CSRF off, so the presence of the security
     // starter changes NOTHING about the app's existing behaviour. This is what keeps every prior test green.
+    // Day 35: also backs off when jwt.enabled=true (the JWT chain owns the app then), so exactly one chain is
+    // ever active. With both keys defaulting false, this is the shipped default — identical to Day 34.
     @Bean
-    @ConditionalOnProperty(prefix = "orderhub.security", name = "enabled", havingValue = "false", matchIfMissing = true)
+    @ConditionalOnExpression("'${orderhub.security.enabled:false}' == 'false' and '${orderhub.security.jwt.enabled:false}' == 'false'")
     public SecurityFilterChain openFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())

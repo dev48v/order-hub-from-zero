@@ -59,6 +59,12 @@
          the CachedSchemaRegistryClient (real registry) and the MockSchemaRegistryClient (mock:// in tests).
          Pulled from the Confluent Maven repo declared below (they are not on Maven Central). -->
     <confluent.version>7.6.1</confluent.version>
+    <!-- Day 35: JJWT (Java JWT) — the library that mints + verifies the HS256-signed JSON Web Tokens.
+         0.12.x is the current line: a fluent builder (Jwts.builder()...signWith(key)) and a strict parser
+         (Jwts.parser().verifyWith(key)...) that validates the signature and expiry. Split into three
+         artifacts: jjwt-api (the compile-time API we code against) plus jjwt-impl and jjwt-jackson at
+         RUNTIME (the implementation + the Jackson-backed JSON (de)serialization of the claims). -->
+    <jjwt.version>0.12.6</jjwt.version>
   </properties>
 
   <!-- Day 33: the Confluent Maven repository. The kafka-avro-serializer + kafka-schema-registry-client
@@ -118,6 +124,27 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
+
+    <!-- Day 35: JJWT — issue + validate stateless JWTs. jjwt-api is the API we compile against; jjwt-impl
+         and jjwt-jackson are pulled in at RUNTIME (the signing/parsing implementation and the Jackson JSON
+         codec for the claims). Splitting them keeps our code depending only on the stable API surface. -->
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-api</artifactId>
+      <version>${jjwt.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-impl</artifactId>
+      <version>${jjwt.version}</version>
+      <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.jsonwebtoken</groupId>
+      <artifactId>jjwt-jackson</artifactId>
+      <version>${jjwt.version}</version>
+      <scope>runtime</scope>
     </dependency>
 
     <!-- Day 11: Spring Data Redis — the cache backend. This starter pulls in Spring Data Redis
