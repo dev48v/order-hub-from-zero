@@ -147,6 +147,21 @@
       <scope>runtime</scope>
     </dependency>
 
+    <!-- Day 36: OAuth2 RESOURCE SERVER — validate JWTs minted by an EXTERNAL OIDC issuer. Where Day 35 had
+         the app both MINT and verify its own HS256 tokens (a shared secret), a resource server only VERIFIES
+         tokens issued elsewhere (Keycloak / Auth0 / Okta / Entra), signed with the issuer's PRIVATE key and
+         verified against the issuer's PUBLIC key via its JWKS endpoint (asymmetric RS256). This starter brings
+         spring-security-oauth2-resource-server (the BearerTokenAuthenticationFilter + 401/403 handling) and
+         spring-security-oauth2-jose (NimbusJwtDecoder + the com.nimbusds:nimbus-jose-jwt library that also
+         gives the tests a way to generate a keypair and sign a test JWT). Gated behind
+         orderhub.security.oauth2.enabled (default FALSE): Boot's own resource-server auto-config stays inert
+         because we never set spring.security.oauth2.resourceserver.* — we wire our own decoder — so the
+         starter is present but dark, and every prior test (Day 35 included) is byte-for-byte unchanged. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+    </dependency>
+
     <!-- Day 11: Spring Data Redis — the cache backend. This starter pulls in Spring Data Redis
          and the Lettuce client (a modern, Netty-based, thread-safe connection pool), so a single
          RedisConnectionFactory can back Spring's caching abstraction. We drive it purely through

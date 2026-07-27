@@ -321,6 +321,31 @@ orderhub:
       secret: ${JWT_SECRET:dev-only-insecure-jwt-secret-change-me-32bytes+}
       expiry: 15m
 
+    # Day 36 — OAuth2 / OIDC RESOURCE SERVER (nested under orderhub.security.oauth2). The contrast with
+    # Day 35: this app no longer ISSUES tokens (there is no /auth/login here). An EXTERNAL OIDC provider
+    # (Keycloak / Auth0 / Okta / Entra) mints RS256-signed tokens; when enabled, OAuth2ResourceServerConfig's
+    # stateless chain only VALIDATES incoming "Authorization: Bearer <token>" against the issuer's public key
+    # (from its JWKS), plus the issuer and (optionally) audience claims — and ALL Day-34/35 chains back off,
+    # so exactly one filter chain is active. Same role rules (reads → ROLE_USER, writes → ROLE_ADMIN; health
+    # + docs public); bad signature / wrong issuer / expired / missing audience → 401, wrong role → 403.
+    #   enabled          — master switch, DEFAULTS OFF so the starter is present but dark and every prior test
+    #                      (Day 35 included) is byte-for-byte unchanged.
+    #   issuer           — the trusted "iss" URI. Every token must carry it; also used for OIDC discovery of
+    #                      the JWKS when neither jwkSetUri nor publicKey is set. From ${OIDC_ISSUER}.
+    #   jwkSetUri        — the issuer's JWKS endpoint (rotating public keys). From ${OIDC_JWK_SET_URI}.
+    #   publicKey        — a single fixed RS256 public key (PEM / bare base64), an alternative to a live JWKS.
+    #   audience         — optional "aud" the token must contain (this API's identifier). Blank → not checked.
+    #   authoritiesClaim — the claim mapped to authorities. "roles" (carrying ROLE_*) keeps the Day-34/35 rules.
+    #   authorityPrefix  — prefix per authority. "" for a roles claim; set "SCOPE_" to authorize by OAuth2 scope.
+    oauth2:
+      enabled: false
+      issuer: ${OIDC_ISSUER:}
+      jwk-set-uri: ${OIDC_JWK_SET_URI:}
+      public-key: ${OIDC_PUBLIC_KEY:}
+      audience: ${OIDC_AUDIENCE:}
+      authorities-claim: roles
+      authority-prefix: ""
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor

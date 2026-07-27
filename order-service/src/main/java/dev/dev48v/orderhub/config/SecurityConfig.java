@@ -73,12 +73,13 @@ public class SecurityConfig {
         return new InMemoryUserDetailsManager(user, admin);
     }
 
-    // enabled=true (and JWT off) → the Day-34 REAL chain: HTTP Basic + role-based authorization.
-    // Day 35: this chain backs off when orderhub.security.jwt.enabled=true, so the stateless JWT chain
-    // (JwtSecurityConfig) is the single active chain then. The condition is an expression because it spans
-    // two keys; with jwt.enabled defaulting false, the Day-34 behaviour (enabled=true → Basic) is unchanged.
+    // enabled=true (and JWT + OAuth2 off) → the Day-34 REAL chain: HTTP Basic + role-based authorization.
+    // Day 35: this chain backs off when orderhub.security.jwt.enabled=true. Day 36: it ALSO backs off when
+    // orderhub.security.oauth2.enabled=true, so the resource-server chain (OAuth2ResourceServerConfig) is the
+    // single active chain then. The condition spans three keys; with jwt.enabled and oauth2.enabled both
+    // defaulting false, the Day-34 behaviour (enabled=true → Basic) is unchanged.
     @Bean
-    @ConditionalOnExpression("'${orderhub.security.enabled:false}' == 'true' and '${orderhub.security.jwt.enabled:false}' == 'false'")
+    @ConditionalOnExpression("'${orderhub.security.enabled:false}' == 'true' and '${orderhub.security.jwt.enabled:false}' == 'false' and '${orderhub.security.oauth2.enabled:false}' == 'false'")
     public SecurityFilterChain securedFilterChain(HttpSecurity http) throws Exception {
         http
                 // CSRF protection defends browser form/session flows against cross-site POSTs; this is a
@@ -105,10 +106,11 @@ public class SecurityConfig {
 
     // enabled=false (DEFAULT) → the OPEN chain. Permit everything, CSRF off, so the presence of the security
     // starter changes NOTHING about the app's existing behaviour. This is what keeps every prior test green.
-    // Day 35: also backs off when jwt.enabled=true (the JWT chain owns the app then), so exactly one chain is
-    // ever active. With both keys defaulting false, this is the shipped default — identical to Day 34.
+    // Day 35: also backs off when jwt.enabled=true (the JWT chain owns the app then). Day 36: also backs off
+    // when oauth2.enabled=true (the resource-server chain owns it then), so exactly one chain is ever active.
+    // With all three keys defaulting false, this is the shipped default — identical to Day 34.
     @Bean
-    @ConditionalOnExpression("'${orderhub.security.enabled:false}' == 'false' and '${orderhub.security.jwt.enabled:false}' == 'false'")
+    @ConditionalOnExpression("'${orderhub.security.enabled:false}' == 'false' and '${orderhub.security.jwt.enabled:false}' == 'false' and '${orderhub.security.oauth2.enabled:false}' == 'false'")
     public SecurityFilterChain openFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
