@@ -9,9 +9,11 @@ import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
 import dev.dev48v.orderhub.inventory.StockView;
+import dev.dev48v.orderhub.observability.OrderMetrics;
 import dev.dev48v.orderhub.outbox.OutboxWriter;
 import dev.dev48v.orderhub.repository.OrderRepository;
 import feign.FeignException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
@@ -69,17 +71,25 @@ public class OrderService {
     // later; the direct publish above is skipped. When it's OFF (default), append() is a no-op that returns
     // false and the Day-25 direct publish stands — so this is fully non-breaking.
     private final OutboxWriter outbox;
+    // Day 37 — the custom order-flow meters (Counter/Timer/Gauge). Injected as an ObjectProvider because the
+    // OrderMetrics bean only exists when orderhub.observability.metrics.enabled=true (ObservabilityConfig is
+    // @ConditionalOnProperty). getIfAvailable() returns the bean when the flag is on, or null when it's off —
+    // so with observability disabled (the default) this records nothing and the create/confirm paths are
+    // byte-for-byte unchanged. Same non-breaking discipline as the Day-30 outbox and the Day-34/35/36 flags.
+    private final ObjectProvider<OrderMetrics> metricsProvider;
 
     public OrderService(OrderRepository repository,
                         OrderProperties properties,
                         InventoryServiceClient inventory,
                         OrderEventPublisher events,
-                        OutboxWriter outbox) {
+                        OutboxWriter outbox,
+                        ObjectProvider<OrderMetrics> metricsProvider) {
         this.repository = repository;
         this.properties = properties;
         this.inventory = inventory;
         this.events = events;
         this.outbox = outbox;
+        this.metricsProvider = metricsProvider;
     }
 
     // A brand-new order can't already be in the "order" cache (its id was just minted), so there's
@@ -94,32 +104,56 @@ public class OrderService {
     @Transactional
     @CacheEvict(cacheNames = CacheConfig.ORDERS_CACHE, allEntries = true)
     public Order placeOrder(String customer, String item, int quantity) {
-        // The DTO's @Max is a static fast-fail at the HTTP edge; this is the authoritative,
-        // configurable business limit (app.orders.max-quantity). Keeping it here means the
-        // rule holds no matter how an order is placed, and the ceiling is tunable per env.
-        if (quantity > properties.maxQuantity()) {
-            throw new IllegalArgumentException(
-                    "quantity must be at most " + properties.maxQuantity());
+        // Day 37 — measure the whole placement: time it (Timer) and tag its outcome (Counter). metricsProvider
+        // yields the meters only when observability is enabled; otherwise `metrics` is null and every call below
+        // is a plain no-op, so the create path is unchanged. The finally records exactly once, on every path.
+        OrderMetrics metrics = metricsProvider.getIfAvailable();
+        long startNanos = System.nanoTime();
+        String outcome = OrderMetrics.OUTCOME_REJECTED; // pessimistic default; set to success only on the happy path
+        try {
+            // The DTO's @Max is a static fast-fail at the HTTP edge; this is the authoritative,
+            // configurable business limit (app.orders.max-quantity). Keeping it here means the
+            // rule holds no matter how an order is placed, and the ceiling is tunable per env.
+            if (quantity > properties.maxQuantity()) {
+                throw new IllegalArgumentException(
+                        "quantity must be at most " + properties.maxQuantity());
+            }
+            // Day 18 — the inter-service call. Before we commit the order, reserve the stock in the
+            // inventory-service over HTTP (via the OpenFeign client). We only persist the order once the
+            // reservation succeeds, so we never accept an order we can't fulfil. The order's `item` is used
+            // as the inventory SKU (e.g. "KEYBOARD-001"); a SKU the inventory service doesn't recognise, or
+            // hasn't enough of, fails the reservation and therefore the order.
+            reserveStock(item, quantity);
+            Order order = new Order(UUID.randomUUID().toString(), customer, item, quantity);
+            Order saved = repository.save(order);
+            // Day 30 — announce the order, choosing the delivery mechanism by config:
+            //   • outbox ON  — outbox.append records the OrderPlaced into the outbox table IN THIS SAME
+            //                  transaction (returns true); the OutboxRelay publishes it to Kafka afterwards. State
+            //                  and event commit atomically — the reliable path.
+            //   • outbox OFF — append() returns false, so we fall back to Day 25's direct, fire-and-forget publish:
+            //                  the publisher never throws back into this flow, so a Kafka outage can't fail the
+            //                  create. Consumers (Day 26+: inventory, payment, orchestrator) react on their own time.
+            if (!outbox.append(saved)) {
+                events.publishOrderPlaced(saved);
+            }
+            if (metrics != null) {
+                metrics.orderOpened(); // one more order now in the PLACED (in-flight) state → orders.open gauge
+            }
+            outcome = OrderMetrics.OUTCOME_SUCCESS;
+            return saved;
+        } catch (InventoryReservationException ex) {
+            // A downstream stock-reservation failure — a distinct, meaningful error outcome for the counter.
+            outcome = OrderMetrics.OUTCOME_RESERVATION_FAILED;
+            throw ex;
+        } catch (RuntimeException ex) {
+            // Any other rejection (e.g. the max-quantity business guard above).
+            outcome = OrderMetrics.OUTCOME_REJECTED;
+            throw ex;
+        } finally {
+            if (metrics != null) {
+                metrics.recordPlacement(outcome, System.nanoTime() - startNanos);
+            }
         }
-        // Day 18 — the inter-service call. Before we commit the order, reserve the stock in the
-        // inventory-service over HTTP (via the OpenFeign client). We only persist the order once the
-        // reservation succeeds, so we never accept an order we can't fulfil. The order's `item` is used
-        // as the inventory SKU (e.g. "KEYBOARD-001"); a SKU the inventory service doesn't recognise, or
-        // hasn't enough of, fails the reservation and therefore the order.
-        reserveStock(item, quantity);
-        Order order = new Order(UUID.randomUUID().toString(), customer, item, quantity);
-        Order saved = repository.save(order);
-        // Day 30 — announce the order, choosing the delivery mechanism by config:
-        //   • outbox ON  — outbox.append records the OrderPlaced into the outbox table IN THIS SAME
-        //                  transaction (returns true); the OutboxRelay publishes it to Kafka afterwards. State
-        //                  and event commit atomically — the reliable path.
-        //   • outbox OFF — append() returns false, so we fall back to Day 25's direct, fire-and-forget publish:
-        //                  the publisher never throws back into this flow, so a Kafka outage can't fail the
-        //                  create. Consumers (Day 26+: inventory, payment, orchestrator) react on their own time.
-        if (!outbox.append(saved)) {
-            events.publishOrderPlaced(saved);
-        }
-        return saved;
     }
 
     // Day 18 — the synchronous reservation call to inventory-service, and how we handle its response.
@@ -218,6 +252,14 @@ public class OrderService {
     public Order confirmOrder(String id) {
         Order order = getOrder(id);
         order.confirm();              // the rule lives on the domain object
-        return repository.save(order);
+        Order saved = repository.save(order);
+        // Day 37 — a confirmed order leaves the in-flight (PLACED) set, so decrement the orders.open gauge.
+        // Reached only on a successful confirm; an illegal transition throws in confirm() above and never
+        // touches the gauge. No-op when observability is disabled (metrics == null).
+        OrderMetrics metrics = metricsProvider.getIfAvailable();
+        if (metrics != null) {
+            metrics.orderClosed();
+        }
+        return saved;
     }
 }

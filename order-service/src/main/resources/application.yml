@@ -296,6 +296,20 @@ orderhub:
     relay-batch-size: 200
     relay-poll-delay-ms: 1000
 
+  # Day 37 — OBSERVABILITY: custom Micrometer metrics, bound onto ObservabilityProperties (prefix
+  # "orderhub.observability"). Phase 5 continues from security into telemetry.
+  #   metrics.enabled — master switch for the CUSTOM order-flow meters (Counter -> orders_placed_total tagged
+  #                     by outcome, Timer -> order_processing_seconds, Gauge -> orders_open). DEFAULTS OFF so
+  #                     ObservabilityConfig's bean isn't created and OrderService records nothing — behaviour is
+  #                     byte-for-byte what it was, which keeps every prior test green. Flip it on
+  #                     (ORDERHUB_OBSERVABILITY_METRICS_ENABLED=true) to register the meters and feed them from
+  #                     the real create/confirm paths; they are then scraped from /actuator/prometheus alongside
+  #                     the built-in JVM/HTTP/Resilience4j meters. The /actuator/prometheus endpoint itself is
+  #                     governed by management.*.exposure.include above (a passive scrape surface), not this flag.
+  observability:
+    metrics:
+      enabled: false
+
   # Day 34 — SPRING SECURITY (Phase 5 begins), bound onto OrderSecurityProperties (prefix "orderhub.security").
   #   enabled — master switch. DEFAULTS OFF so every prior endpoint and test behaves EXACTLY as before: with
   #             it off SecurityConfig installs a permit-all filter chain (the security starter is present but
@@ -486,7 +500,11 @@ management:
         # server and re-creates every @RefreshScope bean, so a config change is adopted with NO restart)
         # and `env` (browse the resolved property hierarchy; Actuator auto-sanitises keys that look like
         # secrets — password/key/token/etc. — to ****** so a secret is never echoed even here).
-        include: health, circuitbreakers, circuitbreakerevents, refresh, env
+        # Day 37 — add `prometheus` (the Micrometer exposition endpoint a Prometheus server PULLS on an
+        # interval; renders every meter in Prometheus text format) and `metrics` (browse individual meters as
+        # JSON). Exposing the scrape endpoint is passive and safe regardless of the observability flag — the
+        # flag (orderhub.observability.metrics.enabled) only gates our CUSTOM order meters, not the endpoint.
+        include: health, circuitbreakers, circuitbreakerevents, refresh, env, prometheus, metrics
   endpoint:
     health:
       show-details: always

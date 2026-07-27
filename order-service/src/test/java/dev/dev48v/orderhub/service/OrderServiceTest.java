@@ -8,8 +8,10 @@ import dev.dev48v.orderhub.inventory.InventoryReservationException;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
 import dev.dev48v.orderhub.inventory.ReserveRequest;
 import dev.dev48v.orderhub.inventory.StockView;
+import dev.dev48v.orderhub.observability.OrderMetrics;
 import dev.dev48v.orderhub.outbox.OutboxWriter;
 import dev.dev48v.orderhub.repository.OrderRepository;
+import org.springframework.beans.factory.ObjectProvider;
 import feign.FeignException;
 import feign.Request;
 import feign.RequestTemplate;
@@ -65,6 +67,13 @@ class OrderServiceTest {
     @Mock
     private OutboxWriter outbox;
 
+    // Day 37 — the metrics provider. A Mockito mock of ObjectProvider returns null from getIfAvailable() by
+    // default, i.e. "observability off" — so this unit test exercises the SAME path it always did and never
+    // records a meter (their registration + recording is proven in ObservabilityMetricsTest). We only need the
+    // constructor satisfied; nothing is stubbed, so strict stubbing stays happy.
+    @Mock
+    private ObjectProvider<OrderMetrics> metricsProvider;
+
     private OrderService service;
 
     @BeforeEach
@@ -72,7 +81,7 @@ class OrderServiceTest {
         // A record carries no behaviour to mock — construct it directly with explicit
         // limits (maxQuantity, defaultPageSize, maxPageSize) so the test is self-contained.
         OrderProperties properties = new OrderProperties(1000, 20, 100);
-        service = new OrderService(repository, properties, inventory, events, outbox);
+        service = new OrderService(repository, properties, inventory, events, outbox, metricsProvider);
     }
 
     @Test

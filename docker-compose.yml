@@ -62,5 +62,23 @@ services:
     volumes:
       - orderhub-pgdata:/var/lib/postgresql/data
 
+  # Day 37 — PROMETHEUS. The metrics database + scraper for Phase 5 observability. Prometheus is PULL-based:
+  # on a fixed interval it GETs each target's /actuator/prometheus endpoint and stores the returned samples as
+  # time series (it is a runtime tool — it does NOT need to run for the app's tests). The Spring services run
+  # on the HOST (see the file header), so prometheus.yml points at host.docker.internal:8082 to reach
+  # order-service on the host from inside this container (extra_hosts maps that name on Linux engines too).
+  # Browse the collected series and run PromQL at http://localhost:9090.
+  prometheus:
+    image: prom/prometheus:v2.53.1
+    container_name: orderhub-prometheus
+    ports:
+      - "9090:9090"       # Prometheus web UI + HTTP API
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   orderhub-pgdata:

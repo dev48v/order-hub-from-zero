@@ -254,6 +254,19 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
+    <!-- Day 37: Micrometer Prometheus registry — Phase 5 OBSERVABILITY. Actuator already puts a Micrometer
+         MeterRegistry on the classpath (JVM/HTTP/Resilience4j metrics wire into it); this adds the PROMETHEUS
+         registry so those meters can be scraped. When present, Boot auto-configures a PrometheusMeterRegistry
+         and lights up the /actuator/prometheus endpoint, which renders every meter in Prometheus' text
+         exposition format for a Prometheus server to PULL on an interval. Version is managed by the Spring
+         Boot parent BOM (3.3.x), so no explicit <version> is needed. Our own domain meters (OrderMetrics —
+         orders_placed_total, order_processing_seconds, orders_open) register against the SAME MeterRegistry
+         and are therefore exposed here too, but only when orderhub.observability.metrics.enabled=true. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+
     <!-- Day 18: OpenFeign — the DECLARATIVE HTTP client. Phase 3 split inventory out into its own app
          (Day 17); today order-service starts calling it OVER THE WIRE instead of via the in-process stub.
          Rather than hand-writing RestTemplate/WebClient plumbing (build URL, serialise body, execute,

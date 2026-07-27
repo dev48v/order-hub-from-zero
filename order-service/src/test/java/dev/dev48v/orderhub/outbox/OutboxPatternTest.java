@@ -4,6 +4,7 @@ import dev.dev48v.orderhub.domain.Order;
 import dev.dev48v.orderhub.config.OrderProperties;
 import dev.dev48v.orderhub.events.OrderEventPublisher;
 import dev.dev48v.orderhub.inventory.InventoryServiceClient;
+import dev.dev48v.orderhub.observability.OrderMetrics;
 import dev.dev48v.orderhub.persistence.JpaOrderRepository;
 import dev.dev48v.orderhub.persistence.OrderEntity;
 import dev.dev48v.orderhub.persistence.SpringDataOrderRepository;
@@ -17,6 +18,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
@@ -105,8 +107,9 @@ class OutboxPatternTest {
                                   OrderProperties properties,
                                   InventoryServiceClient inventory,
                                   OrderEventPublisher events,
-                                  OutboxWriter outbox) {
-            return new OrderService(repository, properties, inventory, events, outbox);
+                                  OutboxWriter outbox,
+                                  ObjectProvider<OrderMetrics> metricsProvider) {
+            return new OrderService(repository, properties, inventory, events, outbox, metricsProvider);
         }
     }
 
