@@ -80,5 +80,32 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # Day 38 — GRAFANA. The dashboards that sit ON TOP of the Day-37 Prometheus metrics. Prometheus stores
+  # the time series and answers PromQL; Grafana turns those queries into the panels an operator actually
+  # watches. It is fully PROVISIONED-AS-CODE from files checked into git (grafana/provisioning + grafana/
+  # dashboards): on startup Grafana reads the datasource file (wiring it to the compose `prometheus`
+  # service at http://prometheus:9090) and the dashboard provider (loading grafana/dashboards/*.json), so
+  # `docker compose up -d` brings the whole observability stack up identically every time — no clicking.
+  # Like Prometheus it is a runtime tool and is NOT needed for the app's build/tests. depends_on ensures
+  # Prometheus starts first so the datasource resolves. Browse the dashboards at http://localhost:3000
+  # (anonymous viewing is on for local convenience; admin/admin for editing).
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: orderhub-grafana
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"       # Grafana web UI
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"      # dev convenience: view dashboards without logging in
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      # provisioning-as-code: datasource + dashboard provider read on startup (read-only mounts)
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
 volumes:
   orderhub-pgdata:

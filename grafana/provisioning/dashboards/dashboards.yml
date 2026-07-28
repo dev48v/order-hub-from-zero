@@ -1,0 +1,25 @@
+# Day 38 — GRAFANA dashboard provider (Phase 5 · observability).
+#
+# This declares a FILE provider: on startup (and every updateIntervalSeconds) Grafana scans the
+# `options.path` folder for *.json dashboard definitions and loads them automatically. That is the
+# other half of provisioning-as-code — the datasource file wires up Prometheus, and this file loads
+# our dashboard JSON — so the entire observability surface is reproducible from git with no clicking.
+#
+# The path is the CONTAINER path our dashboards folder is bind-mounted to in docker-compose
+# (./grafana/dashboards -> /var/lib/grafana/dashboards:ro). foldersFromFilesStructure keeps every
+# JSON in the single `OrderHub` folder rather than mirroring subdirectories. allowUiUpdates lets you
+# tweak a panel live to experiment, but the file on disk stays the source of truth on the next reload.
+apiVersion: 1
+
+providers:
+  - name: OrderHub
+    orgId: 1
+    folder: OrderHub
+    folderUid: orderhub
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 10
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

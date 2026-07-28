@@ -1,0 +1,26 @@
+# Day 38 — GRAFANA datasource provisioning (Phase 5 · observability).
+#
+# Provisioning-as-code: instead of clicking a datasource into being through the UI (which lives in
+# Grafana's own database and is lost when the container is recreated), Grafana reads this file on
+# startup from /etc/grafana/provisioning/datasources and creates the datasource declaratively. The
+# whole observability stack therefore comes up identically every time from files checked into git —
+# `docker compose up -d` and the dashboard is wired to Prometheus with no manual step.
+#
+# The URL is the COMPOSE SERVICE NAME `prometheus` (not localhost): Grafana and Prometheus share the
+# default compose network, so Grafana reaches the Prometheus HTTP API at http://prometheus:9090.
+# access: proxy means the Grafana SERVER queries Prometheus (server-side), so the browser never needs
+# to reach Prometheus directly. The uid is fixed (orderhub-prometheus) so the dashboard JSON can
+# reference this datasource by a stable id rather than a generated one.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: orderhub-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 10s        # matches prometheus.yml scrape_interval so $__rate_interval is sane
