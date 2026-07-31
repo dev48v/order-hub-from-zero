@@ -47,11 +47,18 @@ import java.time.Duration;
 //
 // @DefaultValue keeps the app booting with security OFF even if the keys are missing entirely, and builds
 // each nested record with its own defaults when its block is absent.
+//   method  — Day 40 METHOD-LEVEL SECURITY (nested, prefix "orderhub.security.method"). Orthogonal to the
+//             three URL chains above: this switches on @EnableMethodSecurity (MethodSecurityConfig) so the
+//             @PreAuthorize / @PostAuthorize SpEL on the SERVICE methods is enforced, plus the ADMIN > USER
+//             role hierarchy. It composes ON TOP of whichever URL chain is active (defence in depth).
+//               enabled — master switch, DEFAULT FALSE: with it off no method-security advisor is installed, so
+//                         every @PreAuthorize on OrderService is dormant and all prior tests stay green.
 @ConfigurationProperties(prefix = "orderhub.security")
 public record OrderSecurityProperties(
         @DefaultValue("false") boolean enabled,
         @DefaultValue Jwt jwt,
-        @DefaultValue Oauth2 oauth2
+        @DefaultValue Oauth2 oauth2,
+        @DefaultValue Method method
 ) {
     public record Jwt(
             @DefaultValue("false") boolean enabled,
@@ -68,6 +75,11 @@ public record OrderSecurityProperties(
             @DefaultValue("") String audience,
             @DefaultValue("roles") String authoritiesClaim,
             @DefaultValue("") String authorityPrefix
+    ) {
+    }
+
+    public record Method(
+            @DefaultValue("false") boolean enabled
     ) {
     }
 }

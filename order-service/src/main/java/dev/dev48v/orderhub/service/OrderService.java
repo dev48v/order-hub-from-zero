@@ -22,6 +22,8 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PostAuthorize;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -101,6 +103,11 @@ public class OrderService {
     // the intent-to-publish commit ATOMICALLY — either both land or, on any failure, neither does. Without a
     // shared transaction the two would be separate writes again, and a crash between them could diverge them.
     // (When the outbox is OFF, append() is a no-op and this is simply a normal single-write transaction.)
+    // Day 40 — METHOD SECURITY. Placing an order is a WRITE, so it requires ROLE_ADMIN — enforced at the
+    // service method itself, not only at the URL. Dormant until orderhub.security.method.enabled=true installs
+    // the method-security advisors (MethodSecurityConfig); with the flag off this annotation is a no-op and the
+    // method behaves exactly as before. ADMIN > USER via the role hierarchy, so an admin satisfies this too.
+    @PreAuthorize("hasRole('ADMIN')")
     @Transactional
     @CacheEvict(cacheNames = CacheConfig.ORDERS_CACHE, allEntries = true)
     public Order placeOrder(String customer, String item, int quantity) {
@@ -178,6 +185,9 @@ public class OrderService {
     // HIT return the cached JSON without touching the database; on a MISS run the body and store the
     // returned Order before handing it back. unless="#result == null" is belt-and-braces — the
     // method throws on a miss rather than returning null, and the cache also refuses null values.
+    // Day 40 — a READ, so ROLE_USER is enough (and ADMIN reaches USER through the hierarchy). Inert until the
+    // method-security flag is on, exactly like the write rule above.
+    @PreAuthorize("hasRole('USER')")
     @Cacheable(cacheNames = CacheConfig.ORDER_CACHE, key = "#id", unless = "#result == null")
     public Order getOrder(String id) {
         // Throw a domain exception, not an HTTP one. The service stays free of web
@@ -189,6 +199,7 @@ public class OrderService {
     // Cache the full list under a single fixed key ("orders::all"). Any create/confirm evicts this
     // whole cache (see placeOrder/confirmOrder), so it can never serve a list that's missing a new
     // or newly-confirmed order.
+    @PreAuthorize("hasRole('USER')")   // Day 40 — a read; ROLE_USER (admins reach it via the hierarchy)
     @Cacheable(cacheNames = CacheConfig.ORDERS_CACHE, key = "'all'")
     public List<Order> listOrders() {
         return repository.findAll();
@@ -205,6 +216,7 @@ public class OrderService {
     // now come from OrderProperties: a missing/invalid size defaults to defaultPageSize, and
     // anything above maxPageSize is capped — so the page/sort still flow through the Pageable
     // but the SIZE is governed entirely by externalised config.
+    @PreAuthorize("hasRole('USER')")   // Day 40 — a read; ROLE_USER (admins reach it via the hierarchy)
     public Page<Order> list(String statusParam, Integer requestedSize, Pageable pageable) {
         Pageable effective = applyPagingBounds(requestedSize, pageable);
         OrderStatus status = parseStatus(statusParam);
@@ -245,6 +257,10 @@ public class OrderService {
     // @Caching lets us stack the two @CacheEvicts. Note this method calls getOrder(id), but that
     // internal (self-)call bypasses the proxy, so it will NOT read from or write to the cache here —
     // it hits the repository directly, which is what we want on a write path.
+    // Day 40 — confirming mutates an order, so it is a WRITE: ROLE_ADMIN required. The internal getOrder(id)
+    // call below is a self-invocation that bypasses the proxy, so its own @PreAuthorize is NOT re-checked here
+    // (the same reason it also bypasses the cache) — the ADMIN check on this method is the authoritative gate.
+    @PreAuthorize("hasRole('ADMIN')")
     @Caching(evict = {
             @CacheEvict(cacheNames = CacheConfig.ORDER_CACHE, key = "#id"),
             @CacheEvict(cacheNames = CacheConfig.ORDERS_CACHE, allEntries = true)
@@ -261,5 +277,31 @@ public class OrderService {
             metrics.orderClosed();
         }
         return saved;
+    }
+
+    // Day 40 — OWNERSHIP with a @PreAuthorize SpEL expression (the rule URL security cannot express).
+    // "hasRole('ADMIN') or #ownerId == authentication.name": an ADMIN may list ANY owner's orders, but a plain
+    // USER may only list their OWN — where the owner id must equal their authenticated username. #ownerId binds
+    // to the METHOD ARGUMENT and authentication.name to the current principal, so the check is evaluated BEFORE
+    // the body runs; a user asking for someone else's orders is denied with an AccessDeniedException and the
+    // repository is never touched. This is why the check lives at the method (it can see the argument), not at
+    // the URL. Gated like the rest: inert until orderhub.security.method.enabled=true.
+    @PreAuthorize("hasRole('ADMIN') or #ownerId == authentication.name")
+    public List<Order> listOrdersForOwner(String ownerId) {
+        return repository.findAll().stream()
+                .filter(o -> ownerId.equals(o.getCustomer()))
+                .toList();
+    }
+
+    // Day 40 — OWNERSHIP with @PostAuthorize, the mirror image: the rule needs the RESULT, so it is checked
+    // AFTER the body runs. "hasRole('ADMIN') or returnObject.customer == authentication.name": an ADMIN may
+    // fetch any order; a USER may only receive it if THEY are the order's customer — otherwise the loaded order
+    // is thrown away and the caller gets an AccessDeniedException instead of another user's data. returnObject
+    // is the value this method is about to return. (@PostAuthorize suits reads; never a mutating method, whose
+    // side effects would already have happened before the check.)
+    @PostAuthorize("hasRole('ADMIN') or returnObject.customer == authentication.name")
+    public Order getOrderForOwner(String id) {
+        return repository.findById(id)
+                .orElseThrow(() -> new OrderNotFoundException(id));
     }
 }

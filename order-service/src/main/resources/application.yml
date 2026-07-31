@@ -380,6 +380,18 @@ orderhub:
       authorities-claim: roles
       authority-prefix: ""
 
+    # Day 40 — METHOD-LEVEL SECURITY (nested under orderhub.security.method). Orthogonal to the three URL
+    # chains above: when enabled, MethodSecurityConfig switches on @EnableMethodSecurity so the @PreAuthorize /
+    # @PostAuthorize SpEL declared on the OrderService methods is actually enforced (writes → ROLE_ADMIN, reads
+    # → ROLE_USER, plus ownership rules like "a user may only read their OWN orders"), and registers an
+    # ADMIN > USER role hierarchy so an admin implicitly holds every user permission. It composes ON TOP of
+    # whichever URL chain (Basic / JWT / OAuth2) is active — defence in depth.
+    #   enabled — master switch, DEFAULTS OFF: with it off NO method-security advisor is installed, so the
+    #             @PreAuthorize annotations on OrderService are dormant and every prior test is unchanged.
+    #             Overridable via env var (ORDERHUB_SECURITY_METHOD_ENABLED).
+    method:
+      enabled: false
+
 # Day 24 — INTER-SERVICE AUTHENTICATION (the CALLER's half). inventory-service now demands a shared
 # service token on every /api/** call (its ServiceTokenAuthFilter returns 401 without one), so
 # order-service must PRESENT that token on every outbound Feign request. ServiceTokenFeignInterceptor
