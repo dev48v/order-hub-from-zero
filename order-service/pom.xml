@@ -65,6 +65,12 @@
          artifacts: jjwt-api (the compile-time API we code against) plus jjwt-impl and jjwt-jackson at
          RUNTIME (the implementation + the Jackson-backed JSON (de)serialization of the claims). -->
     <jjwt.version>0.12.6</jjwt.version>
+    <!-- Day 39: loki-logback-appender — the Logback appender that ships log events straight to Loki over
+         HTTP (no sidecar/agent). 1.5.x is the line built for Logback 1.5 (what Spring Boot 3.3 pins) and
+         Java 11+. It is NOT managed by the Spring Boot BOM, so the version is pinned here. The appender is
+         wired in logback-spring.xml under the `loki` Spring profile, so it is DARK by default (present on the
+         classpath but never instantiated) and every prior test/run is byte-for-byte unchanged. -->
+    <loki-logback.version>1.5.2</loki-logback.version>
   </properties>
 
   <!-- Day 33: the Confluent Maven repository. The kafka-avro-serializer + kafka-schema-registry-client
@@ -265,6 +271,45 @@
     <dependency>
       <groupId>io.micrometer</groupId>
       <artifactId>micrometer-registry-prometheus</artifactId>
+    </dependency>
+
+    <!-- Day 39: Micrometer Tracing bridge to BRAVE — Phase 5 OBSERVABILITY, the third pillar (traces). Day 37
+         gave us metrics and Day 38 dashboards; this makes every request/step get a TRACE-ID and SPANs. The
+         bridge adapts Micrometer's vendor-neutral Tracer/Observation API onto Brave (OpenZipkin's tracer): each
+         incoming HTTP request opens a trace, each RestTemplate/WebClient/Feign call and each @KafkaListener
+         continues it by propagating the trace context on the wire (B3 headers / Kafka record headers), and the
+         trace-id + span-id are placed in the logging MDC so every log line carries them. Version is managed by
+         the Spring Boot BOM (micrometer-tracing-bom, 1.3.x for Boot 3.3). Present on the classpath but INERT
+         until management.tracing.enabled resolves true — which it only does when the single feature gate
+         orderhub.observability.tracing.enabled is flipped on (see application.yml) — so the default build is
+         byte-for-byte unchanged and every prior test stays green. -->
+    <dependency>
+      <groupId>io.micrometer</groupId>
+      <artifactId>micrometer-tracing-bridge-brave</artifactId>
+    </dependency>
+
+    <!-- Day 39: the Zipkin REPORTER for Brave — the exporter that ships finished spans out of the app so a
+         trace backend (Zipkin / Grafana Tempo) can assemble the end-to-end waterfall across order → inventory →
+         payment → shipping. The bridge above GENERATES spans; this REPORTS them (to management.zipkin.tracing.
+         endpoint). Version managed by the Boot BOM (zipkin-reporter-bom). Like the bridge it is only wired when
+         tracing is enabled — with the gate off no reporter bean is created, so nothing ever tries to reach a
+         collector and the default/test behaviour is unchanged. -->
+    <dependency>
+      <groupId>io.zipkin.reporter2</groupId>
+      <artifactId>zipkin-reporter-brave</artifactId>
+    </dependency>
+
+    <!-- Day 39: the LOKI logback appender — log AGGREGATION, the counterpart that makes traces↔logs correlate.
+         It ships structured JSON log events (each carrying the traceId/spanId from the MDC) straight to Loki over
+         HTTP. Wired in logback-spring.xml under the `loki` Spring profile so it is DARK by default: present on the
+         classpath but never instantiated unless that profile is active, so no test/run ever attempts to reach
+         Loki and prior behaviour is unchanged. In Grafana a derived field pulls the traceId out of the Loki log
+         line and links straight to the matching trace — the whole point of Phase 5's three pillars lining up.
+         Not in the Boot BOM, so the version is pinned via the loki-logback.version property above. -->
+    <dependency>
+      <groupId>com.github.loki4j</groupId>
+      <artifactId>loki-logback-appender</artifactId>
+      <version>${loki-logback.version}</version>
     </dependency>
 
     <!-- Day 18: OpenFeign — the DECLARATIVE HTTP client. Phase 3 split inventory out into its own app

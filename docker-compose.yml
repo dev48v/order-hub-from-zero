@@ -94,6 +94,7 @@ services:
     container_name: orderhub-grafana
     depends_on:
       - prometheus
+      - loki             # Day 39 — so the provisioned Loki datasource resolves at startup
     ports:
       - "3000:3000"       # Grafana web UI
     environment:
@@ -106,6 +107,22 @@ services:
       # provisioning-as-code: datasource + dashboard provider read on startup (read-only mounts)
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  # Day 39 — LOKI. Log aggregation for Phase 5 observability, the third pillar next to Prometheus (metrics) and
+  # the traces. Where Prometheus PULLS metrics, Loki RECEIVES logs pushed to it: order-service's Loki logback
+  # appender (active under the `loki` Spring profile) ships structured JSON log lines — each carrying the
+  # traceId — to http://loki:3100/loki/api/v1/push, and Grafana queries them back with LogQL. Because every log
+  # line carries the trace-id, a slow p99 spotted on the Day-38 dashboard can be followed from its trace to the
+  # exact log lines, and vice-versa (a Grafana derived field turns the log's traceId into a link to the trace).
+  # Like Prometheus/Grafana it is a RUNTIME tool and is NOT needed for the app's build/tests. The stock image
+  # ships a working single-binary dev config at /etc/loki/local-config.yaml (filesystem storage, no extra setup).
+  # Browse//query via Grafana's Explore at http://localhost:3000; Loki's own API is on http://localhost:3100.
+  loki:
+    image: grafana/loki:3.1.0
+    container_name: orderhub-loki
+    ports:
+      - "3100:3100"       # Loki HTTP API (push + query)
+    command: -config.file=/etc/loki/local-config.yaml
 
 volumes:
   orderhub-pgdata:

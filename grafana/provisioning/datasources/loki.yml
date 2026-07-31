@@ -1,0 +1,37 @@
+# Day 39 — GRAFANA Loki datasource provisioning (Phase 5 · observability, the LOGS pillar).
+#
+# Provisioning-as-code, exactly like the Day-38 Prometheus datasource: instead of clicking a datasource into
+# being (which lives in Grafana's own DB and is lost when the container is recreated), Grafana reads this file on
+# startup and creates the Loki datasource declaratively — so the whole observability stack comes up identically
+# from files checked into git.
+#
+# The URL is the COMPOSE SERVICE NAME `loki` (not localhost): Grafana and Loki share the default compose network,
+# so Grafana reaches Loki's HTTP API at http://loki:3100. access: proxy means the Grafana SERVER queries Loki
+# server-side. The uid is fixed (orderhub-loki) so it is referenced by a stable id.
+#
+# THE CORRELATION — this is the point of Day 39. order-service ships JSON logs to Loki with the traceId embedded
+# (the Loki logback appender's message pattern). The `derivedFields` below run a regex over each log line, pull
+# the traceId out, and render it as a clickable link to the trace in Zipkin/Tempo — so a log line jumps to its
+# trace, and (via the Day-38 dashboard) a slow trace jumps back to its logs. Metrics, traces and logs finally
+# line up on the same request.
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    uid: orderhub-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: false
+    jsonData:
+      # Pull the traceId out of the structured JSON log line and turn it into a link to the matching trace.
+      # matcherRegex captures the traceId value; ${__value.raw} is that captured value, substituted into url.
+      derivedFields:
+        - name: traceId
+          label: traceId
+          matcherType: regex
+          matcherRegex: '"traceId":"(\w+)"'
+          # Link the log's traceId straight to the trace in the trace backend (Zipkin here; point at Tempo in
+          # prod). If a Tempo datasource is provisioned, set datasourceUid instead to open it in-Grafana.
+          url: 'http://localhost:9411/zipkin/traces/${__value.raw}'

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Day 39 — DISTRIBUTED TRACING + LOKI (Phase 5 · observability). This logback config does two jobs:
+
+    1) CONSOLE MDC correlation — puts the trace-id + span-id (and our "orderId" baggage) into EVERY log line via
+       the logging MDC, so a log you read on the console can be tied to the exact trace/span that produced it.
+       Micrometer Tracing populates traceId/spanId in the MDC once tracing is enabled; the `:-` default renders
+       each key empty when tracing is OFF, so with the feature disabled the only change is an empty
+       [order-service,,,] segment — no behaviour depends on it and every prior test stays green.
+
+    2) LOKI log aggregation — the Loki4j appender ships structured JSON logs (each carrying the traceId) to Loki
+       over HTTP. It lives entirely inside <springProfile name="loki">, so it is DARK by default: without that
+       profile the appender is never instantiated and nothing ever reaches for Loki. Enable it with
+       SPRING_PROFILES_ACTIVE=loki (alongside orderhub.observability.tracing.enabled=true). In Grafana a Loki
+       datasource derived-field extracts the traceId from the JSON line and links straight to the matching trace.
+
+  It is a `-spring.xml` (not plain logback.xml) so it can read the Spring Environment via <springProperty> and
+  branch on <springProfile>.
+-->
+<configuration>
+  <!-- Spring Boot's logback defaults: the %clr colour converter, base properties, conversion rules. Including
+       this keeps our console output consistent with the rest of the app's Boot-standard logging. -->
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+  <!-- Values resolved from the Spring Environment (application.yml / env vars). -->
+  <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="order-service"/>
+  <springProperty scope="context" name="lokiUrl" source="orderhub.observability.tracing.loki.url" defaultValue="http://localhost:3100/loki/api/v1/push"/>
+  <springProperty scope="context" name="lokiApp" source="orderhub.observability.tracing.loki.app-label" defaultValue="order-service"/>
+
+  <!-- CONSOLE — the standard line plus the correlation triplet [app,traceId,spanId,orderId]. -->
+  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [${appName:-},%X{traceId:-},%X{spanId:-},%X{orderId:-}] %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <root level="INFO">
+    <appender-ref ref="CONSOLE"/>
+  </root>
+
+  <!-- LOKI — active ONLY under the `loki` Spring profile, so it is never instantiated in the default/test runs. -->
+  <springProfile name="loki">
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+      <http>
+        <url>${lokiUrl}</url>
+      </http>
+      <format>
+        <!-- Loki stream LABELS (low-cardinality — do NOT put traceId here). -->
+        <label>
+          <pattern>app=${lokiApp},host=${HOSTNAME},level=%level</pattern>
+        </label>
+        <!-- The log LINE itself as structured JSON — traceId/spanId/orderId come from the MDC so each line in
+             Loki is correlated to its trace. -->
+        <message>
+          <pattern>{"ts":"%d{yyyy-MM-dd'T'HH:mm:ss.SSS}","level":"%level","app":"${lokiApp}","traceId":"%X{traceId:-}","spanId":"%X{spanId:-}","orderId":"%X{orderId:-}","logger":"%logger{36}","thread":"%thread","msg":"%msg"}</pattern>
+        </message>
+      </format>
+    </appender>
+    <root level="INFO">
+      <appender-ref ref="LOKI"/>
+    </root>
+  </springProfile>
+</configuration>

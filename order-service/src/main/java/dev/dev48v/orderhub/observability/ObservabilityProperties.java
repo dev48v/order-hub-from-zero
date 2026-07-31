@@ -18,12 +18,35 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 // Note this gates only OUR domain meters. The /actuator/prometheus endpoint (and the JVM/HTTP/Resilience4j
 // meters actuator + micrometer already provide) is governed by management.endpoints.web.exposure.include —
 // a passive, pull-based scrape surface that is safe to expose regardless of this flag.
+//
+//   tracing.enabled — Day 39 master switch for DISTRIBUTED TRACING (the third observability pillar), DEFAULT
+//                     FALSE. It is the SINGLE gate: application.yml binds management.tracing.enabled to this
+//                     value (${orderhub.observability.tracing.enabled:false}), so with it off Boot's Brave/Zipkin
+//                     tracing auto-configuration never activates — no trace context, no span reporting — and
+//                     behaviour is byte-for-byte what it was, which keeps every prior test green. TracingConfig
+//                     (@ConditionalOnProperty on this flag) then adds our own tracing beans only when it is on.
+//   tracing.loki    — the Loki log-aggregation settings. The Loki logback appender is activated by the `loki`
+//                     Spring profile (see logback-spring.xml); these bound values document the shipping target
+//                     and are the type-safe mirror of the properties logback reads from the Environment.
 @ConfigurationProperties(prefix = "orderhub.observability")
 public record ObservabilityProperties(
-        @DefaultValue Metrics metrics
+        @DefaultValue Metrics metrics,
+        @DefaultValue Tracing tracing
 ) {
     public record Metrics(
             @DefaultValue("false") boolean enabled
     ) {
+    }
+
+    public record Tracing(
+            @DefaultValue("false") boolean enabled,
+            @DefaultValue Loki loki
+    ) {
+        public record Loki(
+                @DefaultValue("false") boolean enabled,
+                @DefaultValue("http://localhost:3100/loki/api/v1/push") String url,
+                @DefaultValue("order-service") String appLabel
+        ) {
+        }
     }
 }

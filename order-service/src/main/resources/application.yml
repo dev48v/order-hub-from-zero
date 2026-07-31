@@ -310,6 +310,26 @@ orderhub:
     metrics:
       enabled: false
 
+    # Day 39 — DISTRIBUTED TRACING + LOKI (Phase 5 · the third observability pillar). Bound onto
+    # ObservabilityProperties.Tracing.
+    #   tracing.enabled — the SINGLE master switch for tracing. DEFAULTS OFF. It is wired straight into Boot's
+    #                     management.tracing.enabled below (${orderhub.observability.tracing.enabled:false}), so
+    #                     with it off Boot's Brave/Zipkin tracing auto-config never activates (no trace context,
+    #                     no span reporting) and TracingConfig's beans aren't created — behaviour is byte-for-byte
+    #                     unchanged, which keeps every prior test green. Flip it on
+    #                     (ORDERHUB_OBSERVABILITY_TRACING_ENABLED=true) to give every request a trace-id + spans,
+    #                     propagate them across HTTP (RestTemplate/WebClient/Feign) and Kafka, and stamp
+    #                     trace-id/span-id into every log line via the MDC (see logback-spring.xml).
+    #   tracing.loki.*  — the Loki log-shipping target. The Loki logback appender is activated by the `loki`
+    #                     Spring profile (SPRING_PROFILES_ACTIVE=loki), so it is dark unless you opt in; these
+    #                     values are the type-safe mirror of what logback reads from the Environment.
+    tracing:
+      enabled: false
+      loki:
+        enabled: false
+        url: http://localhost:3100/loki/api/v1/push
+        app-label: order-service
+
   # Day 34 — SPRING SECURITY (Phase 5 begins), bound onto OrderSecurityProperties (prefix "orderhub.security").
   #   enabled — master switch. DEFAULTS OFF so every prior endpoint and test behaves EXACTLY as before: with
   #             it off SecurityConfig installs a permit-all filter chain (the security starter is present but
@@ -511,3 +531,26 @@ management:
   health:
     circuitbreakers:
       enabled: true
+
+  # Day 39 — DISTRIBUTED TRACING. The whole feature hangs off ONE gate: management.tracing.enabled is bound to
+  # our orderhub.observability.tracing.enabled flag (defaulting to false), so Boot's Brave/Zipkin tracing
+  # auto-configuration is INERT by default and only activates when the feature is switched on. That keeps the
+  # micrometer-tracing/zipkin-reporter jars present-but-dark and every prior test byte-for-byte unchanged.
+  tracing:
+    enabled: ${orderhub.observability.tracing.enabled:false}
+    # Sample EVERY trace when enabled (great for a dev demo where you want to see each request's waterfall). In
+    # production you'd lower this (e.g. 0.1) so tracing overhead + backend storage stay bounded.
+    sampling:
+      probability: 1.0
+    # Copy trace-id/span-id (and our "orderId" baggage) into the logging MDC so every log line is correlated to
+    # its trace — this is what makes %X{traceId}/%X{spanId} in logback-spring.xml non-empty at runtime.
+    baggage:
+      correlation:
+        enabled: true
+        fields: orderId
+  # Where finished spans are shipped so a backend (Zipkin / Grafana Tempo) can assemble the end-to-end waterfall
+  # across order → inventory → payment → shipping. Externalized so real envs point it at their collector; the
+  # reporter bean only exists when tracing is enabled, so this address is never contacted while the gate is off.
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
