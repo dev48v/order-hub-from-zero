@@ -7,42 +7,42 @@
      31 teal · 32 rose · 33 indigo · 34 emerald · 35 amber · 36 sky · 37 violet · 38 coral · 39 lime · 40 cyan ·
      41 magenta · 42 orange · 43 mint · 44 ruby · 45 cobalt · 46 chartreuse · 47 plum · 48 tangerine · 49 aqua · 50 gold.
      Each OrderHub run recolours ALL colour tokens to that day's hue + moves the .next highlight to the current day. -->
-<!-- THIS FILE: day-40  ·  CYAN  ·  primary #06b6d4  ·  calendar as of Day 40 shipping. -->
+<!-- THIS FILE: day-41  ·  MAGENTA  ·  primary #d946ef  ·  calendar as of Day 41 shipping. -->
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { width: 100vw; height: 100vh; }
-  /* ===== DAY 40 · CYAN ===== */
-  body { background: linear-gradient(135deg, #06272d, #073840 55%, #06272d);
-    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #cdf3f9; overflow: hidden; position: relative;
+  /* ===== DAY 41 · MAGENTA ===== */
+  body { background: linear-gradient(135deg, #26082b, #370a3d 55%, #26082b);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #f4cdf9; overflow: hidden; position: relative;
     padding: 2.8vh 3.6vw 3.4vh; display: flex; flex-direction: column; }
 
   .head { display: flex; justify-content: space-between; align-items: flex-start; }
-  .series-badge { display: inline-block; background: linear-gradient(90deg, #076d7e, #06b6d4); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
-  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #96eaf8, #06b6d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
-  .sub { font-size: 17px; font-weight: 700; color: #ecfbfd; margin-top: 6px; }
-  .tagline { font-size: 13.5px; color: #52dcf4; margin-top: 3px; }
+  .series-badge { display: inline-block; background: linear-gradient(90deg, #6c0b7a, #d946ef); color: #fff; font-size: 12.5px; font-weight: 700; letter-spacing: 2px; padding: 6px 15px; border-radius: 30px; margin-bottom: 8px; }
+  .title { font-size: 42px; font-weight: 900; background: linear-gradient(90deg, #ea98f6, #d946ef); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1.18; padding-bottom: 4px; }
+  .sub { font-size: 17px; font-weight: 700; color: #fbecfd; margin-top: 6px; }
+  .tagline { font-size: 13.5px; color: #dc56f0; margin-top: 3px; }
   .tag-col { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; padding-top: 4px; }
-  .tag { background: rgba(6, 182, 212,0.12); border: 1px solid rgba(6, 182, 212,0.38); color: #52dcf4; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 8px; }
+  .tag { background: rgba(217, 70, 239,0.12); border: 1px solid rgba(217, 70, 239,0.38); color: #dc56f0; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 8px; }
 
   /* calendar — Days 31-50 : 5 cols x 4 rows = 20 (big readable cells) */
-  .cal-title { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #52dcf4; margin: 13px 0 9px; }
+  .cal-title { font-size: 12.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #dc56f0; margin: 13px 0 9px; }
   .cal { flex: 1; display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(4, 1fr); gap: 9px; }
-  .day { background: rgba(7, 47, 54, 0.45); border: 1px solid rgba(6, 182, 212,0.16); border-radius: 10px; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
-  .day .d { font-size: 11.5px; font-weight: 800; color: #33818f; letter-spacing: 0.4px; }
-  .day .t { font-size: 16px; font-weight: 700; color: #d2f4f9; line-height: 1.12; }
-  .day.next { background: linear-gradient(135deg, #08869b, #06b6d4); border-color: #0fcff0; }
+  .day { background: rgba(46, 10, 51, 0.45); border: 1px solid rgba(217, 70, 239,0.16); border-radius: 10px; padding: 11px 14px; display: flex; flex-direction: column; gap: 5px; justify-content: center; }
+  .day .d { font-size: 11.5px; font-weight: 800; color: #7f388a; letter-spacing: 0.4px; }
+  .day .t { font-size: 16px; font-weight: 700; color: #f4d2f9; line-height: 1.12; }
+  .day.next { background: linear-gradient(135deg, #840d96, #d946ef); border-color: #cf14eb; }
   .day.next .d { color: rgba(255,255,255,0.92); }
   .day.next .t { color: #fff; }
-  .day.phase { border-left: 3px solid #0fcff0; background: rgba(6, 182, 212,0.12); }
-  .day.phase .d { color: #52dcf4; }
+  .day.phase { border-left: 3px solid #cf14eb; background: rgba(217, 70, 239,0.12); }
+  .day.phase .d { color: #dc56f0; }
 
   .foot { margin-top: 13px; display: flex; justify-content: space-between; align-items: center; }
-  .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: #52dcf4; font-weight: 600; }
+  .legend { display: flex; gap: 18px; align-items: center; font-size: 12.5px; color: #dc56f0; font-weight: 600; }
   .legend .sw { display: inline-block; width: 13px; height: 13px; border-radius: 4px; vertical-align: -2px; margin-right: 6px; }
-  .sw.n { background: linear-gradient(135deg, #08869b, #06b6d4); }
-  .sw.p { background: rgba(6, 182, 212,0.12); border-left: 3px solid #0fcff0; }
-  .url { font-size: 14px; color: #33818f; font-weight: 600; }
-  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #076d7e, #06b6d4, #076d7e); }
+  .sw.n { background: linear-gradient(135deg, #840d96, #d946ef); }
+  .sw.p { background: rgba(217, 70, 239,0.12); border-left: 3px solid #cf14eb; }
+  .url { font-size: 14px; color: #7f388a; font-weight: 600; }
+  .footer-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background: linear-gradient(90deg, #6c0b7a, #d946ef, #6c0b7a); }
 </style>
 </head>
 <body>
@@ -72,9 +72,9 @@
     <div class="day"><div class="d">DAY 37 ✓</div><div class="t">Micrometer + Prometheus</div></div>
     <div class="day"><div class="d">DAY 38 ✓</div><div class="t">Grafana dashboards</div></div>
     <div class="day"><div class="d">DAY 39 ✓</div><div class="t">Distributed tracing + Loki</div></div>
-    <div class="day next"><div class="d">DAY 40 ✓</div><div class="t">Method security + roles</div></div>
+    <div class="day"><div class="d">DAY 40 ✓</div><div class="t">Method security + roles</div></div>
 
-    <div class="day phase"><div class="d">DAY 41 · DEPLOY</div><div class="t">Notification service</div></div>
+    <div class="day next phase"><div class="d">DAY 41 ✓ · DEPLOY</div><div class="t">Notification service</div></div>
     <div class="day"><div class="d">DAY 42</div><div class="t">Dockerize + compose</div></div>
     <div class="day"><div class="d">DAY 43</div><div class="t">Kubernetes manifests + probes</div></div>
     <div class="day"><div class="d">DAY 44</div><div class="t">Helm + Ingress</div></div>

@@ -89,7 +89,13 @@
        reactor.
        Day 27 adds payment-service — the third bounded context and the first wholly event-driven service:
        it consumes OrderPlaced (its own consumer group) and emits PaymentProcessed to a new payment-events
-       topic. Another one-line change here; six modules now build under one reactor. -->
+       topic. Another one-line change here; six modules now build under one reactor.
+       Day 41 (Phase 6 — DEPLOY kickoff) adds notification-service — a pure, wholly event-driven CONSUMER: in
+       its own consumer group it subscribes to the lifecycle facts the other services already publish
+       (OrderPlaced, PaymentProcessed, ShipmentScheduled/OrderShipped) and, per event, sends the customer a
+       templated NOTIFICATION (email + optional SMS) through a pluggable sender abstraction — idempotent so a
+       redelivery never double-notifies, and gated behind orderhub.notifications.enabled (default OFF) so it
+       composes cleanly and the existing tests stay green. Eight modules now build under one reactor. -->
   <modules>
     <module>config-server</module>
     <module>eureka-server</module>
@@ -98,6 +104,7 @@
     <module>inventory-service</module>
     <module>payment-service</module>
     <module>shipping-service</module>
+    <module>notification-service</module>
   </modules>
 
 </project>

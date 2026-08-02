@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Day 41 — Phase 6 (DEPLOY) KICKOFF: the FIFTH bounded-context service, and the first that is a pure,
+       DEAD-END CONSUMER — it reads events and reacts, but publishes NONE of its own. Its parent is the reactor
+       (../pom.xml), so it inherits Spring Boot's dependency management + the repackage plugin and stays
+       version-locked with the other services. Like payment-service/shipping-service it is its OWN deployable —
+       its own main class, its own port (8085), its own lean dependency set.
+       notification-service subscribes (in its OWN consumer group) to the lifecycle facts the other services
+       ALREADY emit — OrderPlaced (order-service), PaymentProcessed (payment-service), ShipmentScheduled /
+       OrderShipped (shipping-service) — and turns each into a customer-facing NOTIFICATION: a templated email
+       (JavaMailSender, or a logging fallback) plus an optional mock SMS. It is IDEMPOTENT (a redelivered event
+       never notifies twice) and GATED behind orderhub.notifications.enabled (default OFF), so adding it changes
+       nothing about the existing services and every existing test stays green. This is the textbook use of
+       event-driven decoupling: a brand-new capability bolted onto the system by only LISTENING — no producer
+       touched, no schema changed, no service redeployed. -->
+  <parent>
+    <groupId>dev.dev48v</groupId>
+    <artifactId>order-hub-parent</artifactId>
+    <version>0.1.0</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>notification-service</artifactId>
+  <name>OrderHub :: Notification Service</name>
+  <description>The notification bounded context — a pure event consumer that turns order/payment/shipping events into templated customer notifications (email + optional SMS), idempotently and gated behind a feature switch. Its own Spring Boot app.</description>
+
+  <dependencies>
+    <!-- REST endpoints (Tomcat + Spring MVC + Jackson). notification-service exposes a small read surface —
+         GET the notifications it has already dispatched — so the feature is observable directly
+         (curl localhost:8085/api/notifications). The sends all happen in the @KafkaListener. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <!-- Actuator — a health endpoint so the service is independently observable and, later, probeable by
+         a container platform. Each microservice reports its OWN health. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <!-- Day 41 — spring-boot-starter-mail: brings JavaMailSender + SimpleMailMessage, the real email transport
+         behind the EMAIL NotificationSender. It is only WIRED (a JavaMailSender bean auto-configured) when
+         spring.mail.host is set AND orderhub.notifications.email-enabled=true; by default the service uses the
+         LoggingNotificationSender fallback, so NO real SMTP is ever required to build, test, or boot. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-mail</artifactId>
+    </dependency>
+
+    <!-- Day 19 — the Eureka CLIENT starter. notification-service REGISTERS itself with the Eureka server on
+         startup (under spring.application.name = "notification-service") and heartbeats to keep its lease alive,
+         exactly like the other services. Version comes from the Spring Cloud BOM the reactor parent imports. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+    </dependency>
+
+    <!-- Day 21 — the Config CLIENT starter. At startup (driven by spring.config.import=configserver:… in
+         application.yml) notification-service fetches its configuration — the shared application.yml plus its own
+         notification-service.yml — from the config server, folding those properties into the Environment before
+         any beans are created. The import is `optional:`, so tests / offline boots fall back to local defaults. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-config</artifactId>
+    </dependency>
+
+    <!-- Day 41: Spring for Apache Kafka — notification-service uses ONLY the CONSUMER side. In its own consumer
+         group it subscribes to THREE topics (order-placed, payment-events, shipping-events) and reads each
+         lifecycle fact. It PUBLISHES nothing — it is the end of the line, turning facts into customer messages.
+         This one starter brings the @KafkaListener machinery, the ConsumerFactory + JSON deserializer, and
+         Boot's Kafka auto-config. The kafka-clients version is managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- Day 41: spring-kafka-test — an EMBEDDED, in-JVM Kafka broker for the end-to-end notification test. It
+         stands up a real broker inside the test process (no Docker, no external broker), so the test can PUBLISH
+         an OrderPlaced/PaymentProcessed/ShipmentScheduled and PROVE notification-service dispatches EXACTLY ONE
+         templated notification per event — and that a redelivery of the SAME event is deduped (no double send).
+         Brings @EmbeddedKafka, EmbeddedKafkaBroker and KafkaTestUtils. Version managed by the Spring Boot parent. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Repackage into an executable Spring Boot jar — this module ships as its own runnable app,
+           launched independently of the other services. -->
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

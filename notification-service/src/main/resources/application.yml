@@ -1,0 +1,86 @@
+# Day 41 — the Notification service's OWN configuration, separate from the other services'.
+# Each microservice has its own config file, its own name, and its own port. That independence is the point:
+# notification-service boots as its own process and never shares a config surface with the others.
+spring:
+  application:
+    # The SERVICE ID under which notification-service registers in Eureka. Its own logical name, disjoint from
+    # the other services'.
+    name: notification-service
+
+  # Day 21 — become a CONFIG CLIENT. At startup, fetch this service's configuration from the Spring Cloud Config
+  # Server (port 8888) using the service name above: the server returns the shared application.yml merged with
+  # notification-service.yml, joined to this Environment BEFORE the beans are created. `optional:` is the safety
+  # net: if the config server isn't running (tests, offline) the import is skipped silently and the service boots
+  # on its local defaults.
+  config:
+    import: "optional:configserver:http://localhost:8888"
+
+  # Day 41 — Kafka. notification-service is a pure CONSUMER (it subscribes to three topics and publishes
+  # nothing). The broker ADDRESS is externalized exactly like every other service (never baked into the jar):
+  # it resolves from the KAFKA_BOOTSTRAP_SERVERS environment variable, falling back to the local docker-compose
+  # broker on localhost:9092 for dev. Nothing connects at boot unless the listeners start (see enabled below).
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+  # Day 41 — MAIL. Left UNCONFIGURED on purpose: with no spring.mail.host, Spring Boot does NOT auto-configure a
+  # JavaMailSender, and orderhub.notifications.email-enabled is false, so the LoggingNotificationSender fallback
+  # is used and NO SMTP is required to build, test or boot. To send real email, set orderhub.notifications.
+  # email-enabled=true AND provide spring.mail.host/port/username/password for your SMTP server.
+  # mail:
+  #   host: smtp.example.com
+  #   port: 587
+  #   username: ${SMTP_USERNAME:}
+  #   password: ${SMTP_PASSWORD:}
+
+server:
+  # Each service takes its own local port so they can all run on one machine: api-gateway 8080, inventory 8081,
+  # order 8082, payment 8083, shipping 8084, and notification-service takes 8085.
+  port: 8085
+
+# Day 19 — register with the Eureka service registry. On startup the Eureka client POSTs this instance
+# (host + port + app name) to the server, then heartbeats to keep the lease alive; a crash lets the lease expire
+# so callers stop being handed a dead address.
+eureka:
+  # The registry address lives in the config server's SHARED application.yml and is fetched at startup via
+  # spring.config.import above. If the config server is unreachable, Eureka's built-in default applies, so
+  # local/offline boot is unchanged.
+  instance:
+    # Register by IP rather than hostname — more robust across dev machines / containers. The instance id keeps
+    # the app name + port readable in the dashboard.
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+# Day 41 — notification-service settings, bound onto NotificationProperties (prefix "orderhub.notifications").
+#   enabled                — the MASTER FEATURE SWITCH. DEFAULT OFF (dark-by-default): drives every
+#                            @KafkaListener's autoStartup, so with it off the listeners never start, nothing is
+#                            consumed, and the app boots without a broker. Turn it on to actually notify.
+#   *-topic                — the three topics to SUBSCRIBE to; MUST match the producers (order-service's
+#                            order-placed, payment-service's payment-events, shipping-service's shipping-events).
+#   consumer-group-id      — notification-service's OWN consumer group, so it gets its own copy of every event.
+#   email-enabled          — false => LoggingNotificationSender (no SMTP, the default); true => real SMTP.
+#   email-from             — the From address on real outgoing email.
+#   sms-enabled            — the OPTIONAL SMS channel (mock adapter today). Default off.
+#   retry-attempts / retry-backoff-ms — Day 31-style retry-with-backoff before a failing record hits <topic>.DLT.
+orderhub:
+  notifications:
+    enabled: false
+    order-placed-topic: order-placed
+    payment-events-topic: payment-events
+    shipment-events-topic: shipping-events
+    consumer-group-id: notification-service
+    email-enabled: false
+    email-from: orderhub@example.com
+    sms-enabled: false
+    retry-attempts: 3
+    retry-backoff-ms: 500
+
+# Actuator: expose just the health endpoint so the service is independently observable. Every service reports
+# its OWN health — a core reason to split.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: always

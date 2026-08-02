@@ -1,0 +1,15 @@
+# Day 41 — config specific to NOTIFICATION-SERVICE, served by the config server.
+# Merged ON TOP of the shared application.yml when notification-service asks for its config
+# (GET /notification-service/default). Overrides the shared layer for notification-service only.
+orderhub:
+  platform:
+    # Overrides the shared default so notification-service reports THIS as its config-source.
+    config-source: "config-server → notification-service.yml"
+
+  # The notification feature switches, centrally tunable. notification-service ships local defaults in its own
+  # application.yml (all OFF); these prove the feature can be owned centrally and flipped in ONE place per
+  # environment — e.g. turn the whole capability on, or enable the SMS channel, without redeploying the service.
+  notifications:
+    enabled: false
+    email-enabled: false
+    sms-enabled: false
