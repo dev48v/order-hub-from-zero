@@ -2,6 +2,10 @@
 # WHY: everything here would otherwise be shipped to the daemon as build context, slowing the
 # build and risking stale artifacts leaking into the image. The Dockerfile builds the jar from
 # source inside the build stage, so none of this is needed.
+#
+# Day 42 — this is the SHARED ignore file for EVERY module image. All eight services build with
+# `context: .` (the repo root, so the whole reactor is in scope) + their own -f <module>/Dockerfile,
+# so this single .dockerignore trims the context for all of them.
 
 # Maven build output — rebuilt fresh inside the build stage. Day 17: also match the per-module
 # target/ dirs of the reactor (order-service/target, inventory-service/target).
@@ -24,7 +28,9 @@ frontend/
 *.md
 *.log
 *.png
+*.html
 palettes.html
+calendar-prebuilt/
 
 # Don't recurse the Dockerfile/ignore back into the context.
 Dockerfile

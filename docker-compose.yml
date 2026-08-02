@@ -1,18 +1,40 @@
-# OrderHub — local backing stack
-# ---------------------------------------------------------------------------
-# `docker compose up -d` brings up the infrastructure the services expect on
-# localhost: a Kafka broker (Day 25, event-driven), plus the Redis (Day 11)
-# and PostgreSQL (Day 2) the services already use. The Spring services still
-# run on the host (via `mvn spring-boot:run` / your IDE); this file only
-# provides the stateful middleware they talk to.
+# OrderHub — the WHOLE system, one command.
+# ===========================================================================
+# Day 42 (Phase 6 — DEPLOY). Until today this file brought up only the BACKING
+# INFRASTRUCTURE (Kafka, Redis, Postgres, Prometheus, Grafana, Loki) and the
+# Spring services ran on the host via `mvn spring-boot:run`. Now every service
+# has a production multi-stage Dockerfile (see <module>/Dockerfile), so this
+# file also BUILDS and RUNS all eight of them. One command stands the entire
+# stack up:
 #
-# Day 25 — KAFKA. A single-node broker in KRaft mode (no ZooKeeper): from
-# Kafka 3.x the broker can run its own metadata quorum, so one container is a
-# complete broker + controller. order-service's producer publishes an
-# `OrderPlaced` event to the `order-placed` topic on every order create; the
-# broker auto-creates that topic on first use. Reachable from the host on
-# localhost:9092 (that is what spring.kafka.bootstrap-servers resolves to).
+#     docker compose up --build            # build images + start everything
+#     docker compose up -d                 # detached
+#
+# ── the graph (who waits for whom) ─────────────────────────────────────────
+#   config-server (config)  ─┐
+#   eureka-server (registry) ┤←─ every service registers/discovers here
+#   kafka / redis / postgres ┘←─ the stateful middleware
+#        ▼ (depends_on: service_healthy — Compose waits for the healthcheck)
+#   order / inventory / payment / shipping / notification  (the services)
+#        ▼
+#   api-gateway  ── the single public front door on :8080
+#
+# Every app service joins one shared network (orderhub-net) and finds the
+# others by SERVICE NAME (Docker's DNS): config at http://config-server:8888,
+# the registry at http://eureka-server:8761, the broker at kafka:9092. The env
+# blocks below override each service's localhost defaults with those names.
+# NOTE: config/eureka env is injected ONLY into services that carry the
+# matching client on their classpath, so no service ever fails to boot on an
+# import it can't resolve.
 services:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # INFRASTRUCTURE (the stateful middleware + observability the services talk to)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Day 25 — KAFKA. Single-node broker in KRaft mode (no ZooKeeper): one
+  # container is a complete broker + controller. The event backbone every
+  # producer/consumer service uses. Reachable in-network as kafka:9092.
   kafka:
     image: apache/kafka:3.8.0
     container_name: orderhub-kafka
@@ -24,9 +46,9 @@ services:
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      # --- listeners: 9092 for clients, 9093 for the internal controller ---
+      # --- listeners: advertise the in-network name so services reach the broker ---
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       # --- single-node: everything replicated exactly once ---
@@ -34,13 +56,14 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      # let a producer create `order-placed` on first publish (dev convenience)
+      # let a producer create its topic on first publish (dev convenience)
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 10
+    networks: [orderhub-net]
 
   # Day 11 — Redis, the cache + rate-limit + idempotency store.
   redis:
@@ -48,8 +71,14 @@ services:
     container_name: orderhub-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [orderhub-net]
 
-  # Day 2 — PostgreSQL, the production database (order-service persistence).
+  # Day 2 — PostgreSQL, the production database (order-service persistence under the prod profile).
   postgres:
     image: postgres:16-alpine
     container_name: orderhub-postgres
@@ -61,68 +90,298 @@ services:
       POSTGRES_PASSWORD: orderhub
     volumes:
       - orderhub-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orderhub -d orderhub"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [orderhub-net]
 
-  # Day 37 — PROMETHEUS. The metrics database + scraper for Phase 5 observability. Prometheus is PULL-based:
-  # on a fixed interval it GETs each target's /actuator/prometheus endpoint and stores the returned samples as
-  # time series (it is a runtime tool — it does NOT need to run for the app's tests). The Spring services run
-  # on the HOST (see the file header), so prometheus.yml points at host.docker.internal:8082 to reach
-  # order-service on the host from inside this container (extra_hosts maps that name on Linux engines too).
-  # Browse the collected series and run PromQL at http://localhost:9090.
+  # Day 37 — PROMETHEUS. Metrics scraper/store. Runtime tool, not needed for the build/tests. Browse at :9090.
   prometheus:
     image: prom/prometheus:v2.53.1
     container_name: orderhub-prometheus
     ports:
-      - "9090:9090"       # Prometheus web UI + HTTP API
+      - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    networks: [orderhub-net]
 
-  # Day 38 — GRAFANA. The dashboards that sit ON TOP of the Day-37 Prometheus metrics. Prometheus stores
-  # the time series and answers PromQL; Grafana turns those queries into the panels an operator actually
-  # watches. It is fully PROVISIONED-AS-CODE from files checked into git (grafana/provisioning + grafana/
-  # dashboards): on startup Grafana reads the datasource file (wiring it to the compose `prometheus`
-  # service at http://prometheus:9090) and the dashboard provider (loading grafana/dashboards/*.json), so
-  # `docker compose up -d` brings the whole observability stack up identically every time — no clicking.
-  # Like Prometheus it is a runtime tool and is NOT needed for the app's build/tests. depends_on ensures
-  # Prometheus starts first so the datasource resolves. Browse the dashboards at http://localhost:3000
-  # (anonymous viewing is on for local convenience; admin/admin for editing).
+  # Day 38 — GRAFANA. Dashboards over Prometheus + Loki, provisioned-as-code. Browse at :3000.
   grafana:
     image: grafana/grafana:11.1.0
     container_name: orderhub-grafana
     depends_on:
       - prometheus
-      - loki             # Day 39 — so the provisioned Loki datasource resolves at startup
+      - loki
     ports:
-      - "3000:3000"       # Grafana web UI
+      - "3000:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"
-      GF_AUTH_ANONYMOUS_ENABLED: "true"      # dev convenience: view dashboards without logging in
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
-      # provisioning-as-code: datasource + dashboard provider read on startup (read-only mounts)
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    networks: [orderhub-net]
 
-  # Day 39 — LOKI. Log aggregation for Phase 5 observability, the third pillar next to Prometheus (metrics) and
-  # the traces. Where Prometheus PULLS metrics, Loki RECEIVES logs pushed to it: order-service's Loki logback
-  # appender (active under the `loki` Spring profile) ships structured JSON log lines — each carrying the
-  # traceId — to http://loki:3100/loki/api/v1/push, and Grafana queries them back with LogQL. Because every log
-  # line carries the trace-id, a slow p99 spotted on the Day-38 dashboard can be followed from its trace to the
-  # exact log lines, and vice-versa (a Grafana derived field turns the log's traceId into a link to the trace).
-  # Like Prometheus/Grafana it is a RUNTIME tool and is NOT needed for the app's build/tests. The stock image
-  # ships a working single-binary dev config at /etc/loki/local-config.yaml (filesystem storage, no extra setup).
-  # Browse//query via Grafana's Explore at http://localhost:3000; Loki's own API is on http://localhost:3100.
+  # Day 39 — LOKI. Log aggregation (the third observability pillar). Runtime tool. API on :3100.
   loki:
     image: grafana/loki:3.1.0
     container_name: orderhub-loki
     ports:
-      - "3100:3100"       # Loki HTTP API (push + query)
+      - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
+    networks: [orderhub-net]
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # APP SERVICES (built from each module's multi-stage Dockerfile)
+  # Every `build` uses context: . (the repo root, so the whole reactor is in
+  # scope) and the module's own Dockerfile.
+  # ─────────────────────────────────────────────────────────────────────────
+
+  # Day 21 — CONFIG SERVER. The single source of truth for configuration; it is
+  # the ROOT of the graph (nothing it needs), so it has no depends_on. Every
+  # config client below fetches its config from http://config-server:8888.
+  config-server:
+    build:
+      context: .
+      dockerfile: config-server/Dockerfile
+    image: orderhub/config-server:0.1.0
+    container_name: orderhub-config-server
+    ports:
+      - "8888:8888"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 19 — EUREKA SERVER. The service registry. Comes up after config-server.
+  # It carries neither the config client nor the eureka client, so it gets no
+  # config/eureka env — it just runs. Healthcheck hits the dashboard (no actuator).
+  eureka-server:
+    build:
+      context: .
+      dockerfile: eureka-server/Dockerfile
+    image: orderhub/eureka-server:0.1.0
+    container_name: orderhub-eureka-server
+    ports:
+      - "8761:8761"
+    depends_on:
+      config-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 20 — API GATEWAY. The single public front door on :8080. Eureka client
+  # (no config client), so it gets the registry address but no config import.
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    image: orderhub/api-gateway:0.1.0
+    container_name: orderhub-api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 3+ — ORDER SERVICE. The core bounded context. Runs the prod profile
+  # against the compose Postgres + Redis, produces to Kafka, registers in Eureka.
+  order-service:
+    build:
+      context: .
+      dockerfile: order-service/Dockerfile
+    image: orderhub/order-service:0.1.0
+    container_name: orderhub-order-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orderhub
+      SPRING_DATASOURCE_USERNAME: orderhub
+      SPRING_DATASOURCE_PASSWORD: orderhub
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 17 — INVENTORY SERVICE. Internal-only bounded context (reached over
+  # discovery, never through the gateway). Keeps its in-memory H2 — self-contained.
+  inventory-service:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    image: orderhub/inventory-service:0.1.0
+    container_name: orderhub-inventory-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 27 — PAYMENT SERVICE. Event-driven: consumes OrderPlaced, emits PaymentProcessed.
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    image: orderhub/payment-service:0.1.0
+    container_name: orderhub-payment-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 28 — SHIPPING SERVICE. Completes the choreography saga. It ships no local
+  # config, so compose supplies its port + config/registry/broker addresses.
+  shipping-service:
+    build:
+      context: .
+      dockerfile: shipping-service/Dockerfile
+    image: orderhub/shipping-service:0.1.0
+    container_name: orderhub-shipping-service
+    ports:
+      - "8084:8084"
+    environment:
+      SERVER_PORT: "8084"
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+  # Day 41 — NOTIFICATION SERVICE. Pure event-driven consumer; notifications are
+  # gated OFF by default (orderhub.notifications.enabled) so it composes cleanly.
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    image: orderhub/notification-service:0.1.0
+    container_name: orderhub-notification-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_CONFIG_IMPORT: optional:configserver:http://config-server:8888
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    restart: unless-stopped
+    networks: [orderhub-net]
+
+# One shared bridge network: every service resolves the others by service name on it.
+networks:
+  orderhub-net:
+    driver: bridge
 
 volumes:
   orderhub-pgdata:
