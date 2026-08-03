@@ -1,0 +1,10 @@
+# Patterns to ignore when packaging the chart (helm package / helm install).
+.DS_Store
+.git/
+.gitignore
+*.tmproj
+*.bak
+*.swp
+*.orig
+.idea/
+*.tgz

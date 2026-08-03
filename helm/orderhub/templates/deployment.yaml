@@ -1,0 +1,91 @@
+{{/*
+Day 44 (Phase 6 — DEPLOY) — the ONE Deployment template that renders ALL EIGHT apps.
+====================================================================================
+This is the heart of the templatization: a single `range` over .Values.services emits
+one Deployment per entry, so the eight near-identical Day-43 files (33..37 + config /
+eureka / gateway) collapse into this one shape + data in values.yaml. Everything that
+varied between them — name, image, port, replicas, component, profile, config-import,
+server-port, resources — is now a value; everything that was identical (envFrom the
+shared ConfigMap + Secret, the three actuator health-group probes) is written once here.
+*/}}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 4 }}
+    {{- include "orderhub.commonLabels" $ | nindent 4 }}
+    {{- with $svc.component }}
+    app.kubernetes.io/component: {{ . }}
+    {{- end }}
+spec:
+  replicas: {{ $svc.replicas }}
+  selector:
+    matchLabels:
+      {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: "{{ include "orderhub.image" (dict "svc" $svc "root" $) }}"
+          imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
+          ports:
+            - containerPort: {{ $svc.port }}
+          # Shared, non-secret config + the secrets, injected the same way for every app.
+          envFrom:
+            - configMapRef:
+                name: {{ $.Values.config.name }}
+            - secretRef:
+                name: {{ $.Values.secrets.name }}
+          {{- if or $svc.profile $svc.serverPort $svc.configImport }}
+          # Per-service env overrides (an explicit env always wins over an envFrom value).
+          env:
+            {{- with $svc.profile }}
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with $svc.serverPort }}
+            - name: SERVER_PORT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- if $svc.configImport }}
+            - name: SPRING_CONFIG_IMPORT
+              value: {{ $.Values.config.configImport | quote }}
+            {{- end }}
+          {{- end }}
+          # ── Actuator health-group probes (identical shape for every app; port is this
+          #    service's own port). startup shields cold start, readiness gates traffic,
+          #    liveness gates restarts — the invariant that makes the rollout self-healing.
+          startupProbe:
+            httpGet:
+              path: {{ $.Values.probes.startup.path }}
+              port: {{ $svc.port }}
+            failureThreshold: {{ $.Values.probes.startup.failureThreshold }}
+            periodSeconds: {{ $.Values.probes.startup.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ $.Values.probes.readiness.path }}
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{ $.Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $.Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ $.Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              path: {{ $.Values.probes.liveness.path }}
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{ $.Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $.Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ $.Values.probes.liveness.failureThreshold }}
+          resources:
+            requests:
+              cpu: {{ $svc.resources.requests.cpu | quote }}
+              memory: {{ $svc.resources.requests.memory | quote }}
+            limits:
+              cpu: {{ $svc.resources.limits.cpu | quote }}
+              memory: {{ $svc.resources.limits.memory | quote }}
+{{- end }}

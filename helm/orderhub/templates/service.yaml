@@ -1,0 +1,24 @@
+{{/*
+Day 44 (Phase 6 — DEPLOY) — the ONE Service template that renders ALL EIGHT Services.
+====================================================================================
+Same `range` as the deployment: one ClusterIP Service per app, selecting the app's pods
+by the shared selector label and publishing its single port. ClusterIP = internal only;
+external traffic now enters through the Ingress (ingress.yaml), not per-Service NodePorts.
+*/}}
+{{- range $name, $svc := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 4 }}
+    {{- include "orderhub.commonLabels" $ | nindent 4 }}
+spec:
+  type: {{ $svc.serviceType | default "ClusterIP" }}
+  selector:
+    {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 4 }}
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+{{- end }}

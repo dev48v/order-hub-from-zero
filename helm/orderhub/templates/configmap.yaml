@@ -1,0 +1,17 @@
+{{/*
+Day 44 (Phase 6 — DEPLOY) — the shared, non-secret ConfigMap (was k8s/10-configmap.yaml).
+=========================================================================================
+Renders .Values.config.data verbatim into a single ConfigMap that every app container
+consumes via envFrom. `range`ing the map keeps the template agnostic to which keys exist,
+so adding a shared address later is a values change only.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.config.name }}
+  labels:
+    {{- include "orderhub.commonLabels" . | nindent 4 }}
+data:
+  {{- range $key, $val := .Values.config.data }}
+  {{ $key }}: {{ $val | quote }}
+  {{- end }}

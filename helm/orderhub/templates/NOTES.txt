@@ -1,0 +1,28 @@
+OrderHub {{ .Chart.AppVersion }} — release "{{ .Release.Name }}" installed into namespace "{{ .Release.Namespace }}".
+
+{{ len .Values.services }} services deployed:
+{{- range $name, $svc := .Values.services }}
+  - {{ printf "%-22s" $name }} :{{ $svc.port }}  ({{ $svc.replicas }} replica{{ if gt (int $svc.replicas) 1 }}s{{ end }})
+{{- end }}
+
+{{ if .Values.ingress.enabled -}}
+Ingress ENABLED on host "{{ .Values.ingress.host }}" (class {{ .Values.ingress.className }}):
+{{- range .Values.ingress.routes }}
+  http://{{ $.Values.ingress.host }}{{ .path }}  ->  {{ .service }}
+{{- end }}
+  http://{{ .Values.ingress.host }}/  (everything else)  ->  {{ .Values.ingress.defaultBackend.service }}  (default backend)
+
+Point the host at your ingress controller, e.g. for a local cluster:
+  echo "127.0.0.1 {{ .Values.ingress.host }}" | sudo tee -a /etc/hosts
+  curl http://{{ .Values.ingress.host }}/api/orders
+{{- else -}}
+Ingress DISABLED. Reach the gateway with a port-forward:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/api-gateway 8080:8080
+  curl http://localhost:8080/api/orders
+{{- end }}
+
+Watch the rollout converge (readiness probes gate traffic):
+  kubectl -n {{ .Release.Namespace }} get pods -w
+
+Inspect what was rendered without applying it:
+  helm get manifest {{ .Release.Name }} -n {{ .Release.Namespace }}

@@ -1,0 +1,52 @@
+{{/*
+Day 44 (Phase 6 — DEPLOY) — the EXTERNAL front door (net-new for Day 44).
+========================================================================
+Day 43 left every Service ClusterIP (internal only) and noted external exposure as a
+Day-44 concern — this is it. One Ingress, one host, path-based routing:
+
+  http://orderhub.local/api/orders      -> order-service      (Prefix)
+  http://orderhub.local/api/inventory   -> inventory-service  (Prefix)
+  http://orderhub.local/api/payments    -> payment-service    (Prefix)
+  http://orderhub.local/api/shipments   -> shipping-service   (Prefix)
+  http://orderhub.local/<anything else> -> api-gateway        (defaultBackend / catch-all)
+
+The gateway (Day 20) already fronts the whole system, so it is the DEFAULT BACKEND for
+everything not matched by an explicit /api/* prefix. Whole block is gated behind
+ingress.enabled — flip it off to fall back to `kubectl port-forward svc/api-gateway`.
+Requires an ingress controller (ingress-nginx) in the cluster.
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "orderhub.name" . }}
+  labels:
+    {{- include "orderhub.commonLabels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.defaultBackend }}
+  # Catch-all: anything not matched below goes to the gateway.
+  defaultBackend:
+    service:
+      name: {{ .service }}
+      port:
+        number: {{ .port }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range .Values.ingress.routes }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ .service }}
+                port:
+                  number: {{ .port }}
+          {{- end }}
+{{- end }}

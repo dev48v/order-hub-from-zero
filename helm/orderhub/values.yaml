@@ -1,0 +1,222 @@
+# Day 44 (Phase 6 — DEPLOY) — the DATA half of the chart.
+# ===========================================================================
+# Everything Day 43 hard-coded across fourteen YAML files lives here as VALUES; the
+# templates in templates/ are the shape. Override any of it at install/upgrade time
+# with `--set` or a `-f my-values.yaml`, e.g.:
+#   helm upgrade orderhub ./helm/orderhub --set services.order-service.replicas=4
+#   helm upgrade orderhub ./helm/orderhub --set ingress.enabled=false
+# No template edit, no kubectl — just a new value and a re-render.
+
+# ── global: applied to every service unless overridden ──────────────────────────
+global:
+  # Optional registry prefix, e.g. "ghcr.io/dev48v" or an ECR/GCR host. Empty = use
+  # the bare Day-42 local image names (orderhub/<svc>), which is what kind/minikube load.
+  imageRegistry: ""
+  # IfNotPresent = never re-pull an image that is already on the node — right for the
+  # locally-built :0.1.0 tags (a cluster pulling them from a registry would 404).
+  imagePullPolicy: IfNotPresent
+
+# ── probes: the actuator health-group probes, IDENTICAL for all eight apps ───────
+# Day 43 wired startup/readiness/liveness onto every app's Actuator health groups.
+# Because they are the same everywhere, they live ONCE here and the deployment
+# template stamps them onto every service (each probe's httpGet port is the
+# service's own port, filled in by the template).
+probes:
+  startup:
+    # startupProbe shields a slow JVM cold start — liveness/readiness don't count
+    # failures until the app has STARTED (up to 30 x 10s = 5 min budget).
+    path: /actuator/health/liveness
+    failureThreshold: 30
+    periodSeconds: 10
+  readiness:
+    # readiness gates TRAFFIC — a pod stays out of the Service endpoints until UP.
+    path: /actuator/health/readiness
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 6
+  liveness:
+    # liveness gates RESTARTS — a wedged pod is killed and recreated.
+    path: /actuator/health/liveness
+    initialDelaySeconds: 20
+    periodSeconds: 15
+    failureThreshold: 6
+
+# ── config: the shared, NON-secret ConfigMap (was k8s/10-configmap.yaml) ─────────
+config:
+  name: orderhub-config
+  # Injected into every app container via `envFrom` (see the deployment template).
+  # Plaintext addresses + switches only — anything sensitive lives under `secrets`.
+  data:
+    SPRING_PROFILES_ACTIVE: "k8s"          # turns on the Actuator k8s probe profile
+    EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
+    EUREKA_SERVER_URL: "http://eureka-server:8761/eureka/"
+    KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+    REDIS_HOST: "redis"
+    REDIS_PORT: "6379"
+    SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/orderhub"
+  # The config-client import URL, stamped as SPRING_CONFIG_IMPORT onto the services
+  # that flag `configImport: true` below.
+  configImport: "optional:configserver:http://config-server:8888"
+
+# ── secrets: PLACEHOLDERS ONLY (was k8s/11-secret.yaml) ──────────────────────────
+# ⚠️  base64 is ENCODING, not encryption. THESE ARE NOT REAL SECRETS — each value
+#     base64-decodes to a literal "change-me-…" placeholder (or "orderhub"). This
+#     block exists so the chart renders a complete Secret; in a real cluster you
+#     NEVER commit real values — create the Secret out-of-band or manage it with
+#     Sealed Secrets / External Secrets / SOPS / Vault and set `secrets.create: false`.
+secrets:
+  name: orderhub-secrets
+  create: true
+  data:
+    # base64("change-me-hs256-signing-secret-min-32-bytes-long")
+    JWT_SECRET: Y2hhbmdlLW1lLWhzMjU2LXNpZ25pbmctc2VjcmV0LW1pbi0zMi1ieXRlcy1sb25n
+    # base64("change-me-inter-service-shared-token")
+    SERVICE_TOKEN: Y2hhbmdlLW1lLWludGVyLXNlcnZpY2Utc2hhcmVkLXRva2Vu
+    # base64("orderhub")
+    SPRING_DATASOURCE_USERNAME: b3JkZXJodWI=
+    # base64("change-me-postgres-password")
+    SPRING_DATASOURCE_PASSWORD: Y2hhbmdlLW1lLXBvc3RncmVzLXBhc3N3b3Jk
+
+# ── services: the EIGHT runnable Spring Boot apps (the range target) ─────────────
+# One entry per app; the deployment + service templates `range` over this map, so
+# ONE template shape renders all eight Deployments and all eight ClusterIP Services.
+# Per-entry keys:
+#   image/tag   — the Day-42 build image (global.imageRegistry may prefix it)
+#   port        — containerPort + Service port (matches Day-42 EXPOSE / compose)
+#   replicas    — desired pods
+#   component   — the app.kubernetes.io/component label
+#   profile     — SPRING_PROFILES_ACTIVE override (omitted -> inherits "k8s" from config)
+#   configImport— true -> stamp SPRING_CONFIG_IMPORT (config-client services)
+#   serverPort  — explicit SERVER_PORT env (only shipping-service, which ships no local config)
+#   resources   — requests/limits
+services:
+
+  config-server:
+    image: orderhub/config-server
+    tag: "0.1.0"
+    port: 8888
+    replicas: 1
+    component: config
+    # native = classpath config backend; k8s = actuator probes. Explicit env wins over the ConfigMap.
+    profile: "native,k8s"
+    resources:
+      requests: { cpu: 150m, memory: 320Mi }
+      limits:   { cpu: "1",  memory: 640Mi }
+
+  eureka-server:
+    image: orderhub/eureka-server
+    tag: "0.1.0"
+    port: 8761
+    replicas: 1
+    component: discovery
+    # no profile override -> inherits "k8s" from the ConfigMap (actuator probes only).
+    resources:
+      requests: { cpu: 150m, memory: 320Mi }
+      limits:   { cpu: "1",  memory: 640Mi }
+
+  api-gateway:
+    image: orderhub/api-gateway
+    tag: "0.1.0"
+    port: 8080
+    replicas: 2
+    component: gateway
+    # prod = lean logging + env-supplied registry DNS; k8s = actuator probes.
+    profile: "prod,k8s"
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+      limits:   { cpu: "1",  memory: 768Mi }
+
+  order-service:
+    image: orderhub/order-service
+    tag: "0.1.0"
+    port: 8082
+    replicas: 2
+    component: application
+    profile: "prod,k8s"
+    configImport: true
+    resources:
+      requests: { cpu: 250m, memory: 448Mi }
+      limits:   { cpu: "1",  memory: 768Mi }
+
+  inventory-service:
+    image: orderhub/inventory-service
+    tag: "0.1.0"
+    port: 8081
+    replicas: 2
+    component: application
+    configImport: true
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+      limits:   { cpu: "1",  memory: 768Mi }
+
+  payment-service:
+    image: orderhub/payment-service
+    tag: "0.1.0"
+    port: 8083
+    replicas: 1
+    component: application
+    configImport: true
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+      limits:   { cpu: "1",  memory: 768Mi }
+
+  shipping-service:
+    image: orderhub/shipping-service
+    tag: "0.1.0"
+    port: 8084
+    replicas: 1
+    component: application
+    configImport: true
+    # ships no local config, so its port is supplied explicitly (mirrors compose).
+    serverPort: 8084
+    resources:
+      requests: { cpu: 200m, memory: 384Mi }
+      limits:   { cpu: "1",  memory: 768Mi }
+
+  notification-service:
+    image: orderhub/notification-service
+    tag: "0.1.0"
+    port: 8085
+    replicas: 1
+    component: application
+    configImport: true
+    resources:
+      requests: { cpu: 150m, memory: 384Mi }
+      limits:   { cpu: "1",  memory: 768Mi }
+
+# ── ingress: the Day-44 EXTERNAL front door (was TODO in Day 43) ─────────────────
+# Day 43 kept every Service ClusterIP (internal only). Day 44 puts an Ingress in
+# front: one host, path-based routing to the api-facing services, and the api-gateway
+# as the DEFAULT BACKEND (catch-all) for everything else. Flip `enabled: false` to go
+# back to port-forwarding the gateway. Needs an ingress controller in the cluster
+# (ingress-nginx); on kind/minikube enable the nginx addon first.
+ingress:
+  enabled: true
+  className: nginx
+  host: orderhub.local
+  annotations: {}
+    # e.g. for ingress-nginx path rewriting / larger bodies:
+    # nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+  # Anything that matches no explicit path below falls through to the gateway, which
+  # already fronts the whole system (Day 20) — so the gateway is the default backend.
+  defaultBackend:
+    service: api-gateway
+    port: 8080
+  # Explicit per-service path routes. Prefix match: /api/orders (and below) -> order-service.
+  routes:
+    - path: /api/orders
+      pathType: Prefix
+      service: order-service
+      port: 8082
+    - path: /api/inventory
+      pathType: Prefix
+      service: inventory-service
+      port: 8081
+    - path: /api/payments
+      pathType: Prefix
+      service: payment-service
+      port: 8083
+    - path: /api/shipments
+      pathType: Prefix
+      service: shipping-service
+      port: 8084

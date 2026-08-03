@@ -1,0 +1,27 @@
+# Day 44 (Phase 6 — DEPLOY) — the Helm CHART metadata for the whole OrderHub stack.
+# ===========================================================================
+# Day 43 hand-wrote one Deployment + Service per service as flat YAML so you could
+# read exactly what the platform runs. Day 44 templatizes that SAME topology into a
+# Helm chart: values.yaml holds the data (the eight services, config, secrets,
+# ingress) and templates/ hold ONE parameterised shape that `range`s over them — so
+# `helm install orderhub ./helm/orderhub` renders byte-equivalent manifests, and a
+# one-line values override retunes replicas/images/routes without editing YAML.
+#
+# apiVersion v2 = the Helm 3 chart format (v1 was Helm 2 / Tiller). `version` is the
+# CHART's own SemVer (bump it when the templates change); `appVersion` tracks the
+# application image tag it deploys (orderhub/*:0.1.0), and is informational only.
+apiVersion: v2
+name: orderhub
+description: OrderHub — event-driven order-fulfilment microservices (8 Spring Boot apps, config + secret + ingress) as a single Helm release.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - orderhub
+  - microservices
+  - spring-boot
+  - kubernetes
+home: https://www.dev48.infy.uk
+maintainers:
+  - name: dev48v
+    email: dev48vb@gmail.com
