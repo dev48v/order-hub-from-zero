@@ -1,0 +1,38 @@
+# Day 43 (Phase 6 — DEPLOY) — SHARED, NON-SECRET configuration for every service.
+# ===========================================================================
+# This is the Kubernetes equivalent of the per-service `environment:` blocks in
+# docker-compose.yml — but declared ONCE and injected into every app container
+# via `envFrom` (see each Deployment). It carries only addresses and switches
+# that are safe to sit in plaintext; anything sensitive (JWT signing key, the
+# inter-service token, DB credentials) lives in the Secret next door, never here.
+#
+# Two things worth calling out:
+#   • SPRING_PROFILES_ACTIVE=k8s activates the profile-gated `k8s` document each
+#     service's application.yml carries (added Day 43). That document ONLY turns
+#     on Actuator's Kubernetes health PROBES — it changes nothing about local /
+#     compose runs, which never set this profile. Services that need a second
+#     profile (config-server → native, api-gateway/order-service → prod) override
+#     SPRING_PROFILES_ACTIVE with an explicit `env:` entry in their Deployment,
+#     and an explicit env always wins over an envFrom value.
+#   • The addresses point at the ClusterIP Services by NAME — Kubernetes' in-
+#     cluster DNS resolves `eureka-server`, `kafka`, `redis`, `postgres` to the
+#     right pods, exactly like Docker's service-name DNS did in compose.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: orderhub-config
+  namespace: orderhub
+  labels:
+    app.kubernetes.io/part-of: orderhub
+data:
+  SPRING_PROFILES_ACTIVE: "k8s"
+  # Service discovery — the Eureka registry, reached by its Service name.
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server:8761/eureka/"
+  EUREKA_SERVER_URL: "http://eureka-server:8761/eureka/"
+  # The event backbone — the Kafka broker, reached by its Service name.
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  # The cache / rate-limit / idempotency store — Redis, reached by its Service name.
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  # The order-service database URL (username/password come from the Secret).
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/orderhub"

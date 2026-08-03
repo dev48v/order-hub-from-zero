@@ -1,0 +1,84 @@
+# Day 43 (Phase 6 — DEPLOY) — API GATEWAY (Deployment + ClusterIP Service).
+# ===========================================================================
+# The single public front door on 8080. Two replicas — it is the edge, so it is the
+# first thing to scale for availability. It is a Eureka CLIENT (no config client), so
+# the ConfigMap supplies the registry address; SPRING_PROFILES_ACTIVE is overridden to
+# "prod,k8s" (prod = lean logging + env-supplied registry DNS, k8s = actuator probes).
+# Kept a ClusterIP here — external exposure (an Ingress in front of this Service) is
+# Day 44. Image + port match the Day-42 Docker build: orderhub/api-gateway:0.1.0 on 8080.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: orderhub
+  labels:
+    app: api-gateway
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: orderhub/api-gateway:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod,k8s"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: orderhub
+  labels:
+    app: api-gateway
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080

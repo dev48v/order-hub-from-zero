@@ -1,0 +1,66 @@
+# Day 43 (Phase 6 — DEPLOY) — Redis, the cache / rate-limit / idempotency store.
+# ===========================================================================
+# Lightweight, runnable-in-spirit Deployment (ephemeral — no persistence needed:
+# everything in it is a cache or a short-TTL bucket that safely rebuilds). Reached
+# in-cluster by the Service name `redis` on 6379, exactly as REDIS_HOST/REDIS_PORT
+# in the ConfigMap point.
+#
+# ⚠️  PRODUCTION: use a managed Redis, or a Redis operator / Helm chart with
+#     persistence + replication, rather than a single ephemeral pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: orderhub
+  labels:
+    app: redis
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: orderhub
+  labels:
+    app: redis
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379

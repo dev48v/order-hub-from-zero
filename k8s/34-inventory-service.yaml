@@ -1,0 +1,83 @@
+# Day 43 (Phase 6 — DEPLOY) — INVENTORY SERVICE (Deployment + ClusterIP Service).
+# ===========================================================================
+# Internal-only bounded context on 8081 (reached over discovery, never through the
+# gateway — it authenticates callers with the shared SERVICE_TOKEN from the Secret).
+# Two replicas: it is a Kafka consumer in one group, so scaling out just spreads the
+# partitions across instances. Config + Eureka client; profile inherits "k8s" from the
+# ConfigMap. Image + port match the Day-42 Docker build: orderhub/inventory-service:0.1.0 on 8081.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-service
+  namespace: orderhub
+  labels:
+    app: inventory-service
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: application
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: inventory-service
+  template:
+    metadata:
+      labels:
+        app: inventory-service
+    spec:
+      containers:
+        - name: inventory-service
+          image: orderhub/inventory-service:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          env:
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configserver:http://config-server:8888"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  namespace: orderhub
+  labels:
+    app: inventory-service
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: inventory-service
+  ports:
+    - port: 8081
+      targetPort: 8081

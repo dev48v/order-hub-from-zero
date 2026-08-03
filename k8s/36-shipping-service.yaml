@@ -1,0 +1,88 @@
+# Day 43 (Phase 6 — DEPLOY) — SHIPPING SERVICE (Deployment + ClusterIP Service).
+# ===========================================================================
+# Completes the choreography saga on 8084. It ships NO local application.yml (Day 42
+# note: "it ships no local config"), so its port is supplied from the outside: SERVER_PORT
+# is set explicitly here, mirroring the compose env. Day 43 added a profile-gated `k8s`
+# document to a new shipping-service application.yml purely to enable the Actuator probes
+# (nothing else, so the default/compose run is unchanged). Config + Eureka client + Kafka;
+# profile inherits "k8s" from the ConfigMap. Image + port match the Day-42 Docker build:
+# orderhub/shipping-service:0.1.0 on 8084.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shipping-service
+  namespace: orderhub
+  labels:
+    app: shipping-service
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: application
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shipping-service
+  template:
+    metadata:
+      labels:
+        app: shipping-service
+    spec:
+      containers:
+        - name: shipping-service
+          image: orderhub/shipping-service:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          env:
+            # shipping-service ships no local config, so its port is supplied here.
+            - name: SERVER_PORT
+              value: "8084"
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configserver:http://config-server:8888"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8084
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8084
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shipping-service
+  namespace: orderhub
+  labels:
+    app: shipping-service
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: shipping-service
+  ports:
+    - port: 8084
+      targetPort: 8084

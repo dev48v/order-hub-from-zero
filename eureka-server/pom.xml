@@ -36,6 +36,18 @@
       <artifactId>spring-cloud-starter-netflix-eureka-server</artifactId>
     </dependency>
 
+    <!-- Day 43 (Phase 6 — DEPLOY) — Actuator, so the registry exposes the SAME Kubernetes health
+         probes every other service already has. The registry is a first-class pod in the cluster:
+         Kubernetes must be able to gate its rollout on readiness (/actuator/health/readiness) and
+         restart it on liveness (/actuator/health/liveness) failures, just like the services that
+         depend on it. This is the one module that lacked actuator until now; the probe endpoints
+         themselves stay gated behind the `k8s` Spring profile (see application.yml), so a local run
+         is unchanged apart from /actuator/health becoming available. -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>

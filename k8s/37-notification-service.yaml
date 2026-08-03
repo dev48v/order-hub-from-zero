@@ -1,0 +1,82 @@
+# Day 43 (Phase 6 — DEPLOY) — NOTIFICATION SERVICE (Deployment + ClusterIP Service).
+# ===========================================================================
+# Pure event-driven consumer on 8085 (notifications are gated OFF by default via
+# orderhub.notifications.enabled, so it deploys cleanly and does nothing until switched
+# on). Config + Eureka client + Kafka; profile inherits "k8s" from the ConfigMap. Image +
+# port match the Day-42 Docker build: orderhub/notification-service:0.1.0 on 8085.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: orderhub
+  labels:
+    app: notification-service
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: application
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+    spec:
+      containers:
+        - name: notification-service
+          image: orderhub/notification-service:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8085
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          env:
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configserver:http://config-server:8888"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8085
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8085
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8085
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 150m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: orderhub
+  labels:
+    app: notification-service
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: notification-service
+  ports:
+    - port: 8085
+      targetPort: 8085

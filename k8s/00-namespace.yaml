@@ -1,0 +1,12 @@
+# Day 43 (Phase 6 — DEPLOY) — the NAMESPACE the whole stack lives in.
+# ===========================================================================
+# Everything else in k8s/ is created inside `orderhub`, so the deployment is a
+# self-contained tenant of the cluster: one `kubectl delete namespace orderhub`
+# tears the entire stack down, and RBAC/quotas/network-policies can be scoped
+# to it later. Applied first (the 00- prefix) so every object below has a home.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orderhub
+  labels:
+    app.kubernetes.io/part-of: orderhub

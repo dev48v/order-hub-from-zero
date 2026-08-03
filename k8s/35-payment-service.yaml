@@ -1,0 +1,81 @@
+# Day 43 (Phase 6 — DEPLOY) — PAYMENT SERVICE (Deployment + ClusterIP Service).
+# ===========================================================================
+# Event-driven bounded context on 8083: consumes OrderPlaced, emits PaymentProcessed.
+# Config + Eureka client + Kafka; profile inherits "k8s" from the ConfigMap. Image +
+# port match the Day-42 Docker build: orderhub/payment-service:0.1.0 on 8083.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: orderhub
+  labels:
+    app: payment-service
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: application
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payment-service
+  template:
+    metadata:
+      labels:
+        app: payment-service
+    spec:
+      containers:
+        - name: payment-service
+          image: orderhub/payment-service:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          env:
+            - name: SPRING_CONFIG_IMPORT
+              value: "optional:configserver:http://config-server:8888"
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8083
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 384Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: orderhub
+  labels:
+    app: payment-service
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: payment-service
+  ports:
+    - port: 8083
+      targetPort: 8083

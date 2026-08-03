@@ -1,0 +1,81 @@
+# Day 43 (Phase 6 — DEPLOY) — EUREKA SERVER (Deployment + ClusterIP Service).
+# ===========================================================================
+# The service registry every app registers with and discovers peers through. It
+# runs as a single standalone node (replicas: 1 — it is not horizontally scaled
+# here). Day 43 also added spring-boot-starter-actuator to this module so it, too,
+# exposes the Kubernetes health probes every other service already had — so its
+# rollout is gated on the SAME actuator liveness/readiness contract. Image + port
+# match the Day-42 Docker build: orderhub/eureka-server:0.1.0 on 8761.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: eureka-server
+  namespace: orderhub
+  labels:
+    app: eureka-server
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: discovery
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: eureka-server
+  template:
+    metadata:
+      labels:
+        app: eureka-server
+    spec:
+      containers:
+        - name: eureka-server
+          image: orderhub/eureka-server:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8761
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8761
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8761
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8761
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 150m
+              memory: 320Mi
+            limits:
+              cpu: "1"
+              memory: 640Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eureka-server
+  namespace: orderhub
+  labels:
+    app: eureka-server
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: eureka-server
+  ports:
+    - port: 8761
+      targetPort: 8761

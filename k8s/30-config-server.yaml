@@ -1,0 +1,89 @@
+# Day 43 (Phase 6 — DEPLOY) — CONFIG SERVER (Deployment + ClusterIP Service).
+# ===========================================================================
+# The ROOT of the graph — the single source of truth for configuration. Nothing
+# it needs, so it comes up first. It keeps its own `native` backend (serves config
+# from the classpath) AND joins the `k8s` profile so its Actuator Kubernetes probes
+# are enabled — hence SPRING_PROFILES_ACTIVE is overridden here to "native,k8s"
+# (an explicit env wins over the ConfigMap's plain "k8s"). Image + port match the
+# Day-42 Docker build: orderhub/config-server:0.1.0 on 8888.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server
+  namespace: orderhub
+  labels:
+    app: config-server
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: config
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: config-server
+  template:
+    metadata:
+      labels:
+        app: config-server
+    spec:
+      containers:
+        - name: config-server
+          image: orderhub/config-server:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8888
+          envFrom:
+            - configMapRef:
+                name: orderhub-config
+            - secretRef:
+                name: orderhub-secrets
+          env:
+            # native = classpath config backend; k8s = turn on the Actuator probes.
+            - name: SPRING_PROFILES_ACTIVE
+              value: "native,k8s"
+          # startupProbe shields a slow JVM cold start: liveness/readiness don't begin
+          # counting failures until the app has started (up to 30 × 10s = 5 min budget).
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8888
+            failureThreshold: 30
+            periodSeconds: 10
+          # readiness gates TRAFFIC — a pod out of the Service endpoints until ready.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8888
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 6
+          # liveness gates RESTARTS — a wedged pod is killed and recreated.
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8888
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 150m
+              memory: 320Mi
+            limits:
+              cpu: "1"
+              memory: 640Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: config-server
+  namespace: orderhub
+  labels:
+    app: config-server
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: config-server
+  ports:
+    - port: 8888
+      targetPort: 8888

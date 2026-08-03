@@ -1,0 +1,27 @@
+# Day 43 (Phase 6 — DEPLOY) — shipping-service's FIRST application.yml, and deliberately a tiny one.
+# ===========================================================================================
+# Through Day 42 shipping-service shipped NO local config at all — every setting (its port, the
+# config-server / Eureka / Kafka addresses) was injected from the outside by docker-compose. That is
+# still true for local + compose runs: this file is a SINGLE, PROFILE-GATED document that contributes
+# NOTHING unless the `k8s` profile is active (the k8s ConfigMap sets SPRING_PROFILES_ACTIVE=k8s). So a
+# default/compose run behaves exactly as before — as if this file weren't here.
+#
+# When the k8s profile IS active it does ONE thing: switch on Spring Boot Actuator's Kubernetes health
+# PROBES so the platform can poll them — readiness (/actuator/health/readiness) gates traffic into the
+# pod, liveness (/actuator/health/liveness) gates restarts of a wedged pod. The `group` mappings bind
+# each probe to Boot's built-in ApplicationAvailability states (readinessState / livenessState). The
+# pod's port (8084) is supplied by the Deployment's SERVER_PORT env, matching the compose setup.
+spring:
+  config:
+    activate:
+      on-profile: k8s
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState
+        liveness:
+          include: livenessState

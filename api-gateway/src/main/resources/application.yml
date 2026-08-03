@@ -93,3 +93,27 @@ management:
   endpoint:
     health:
       show-details: always
+
+# ── Day 43 (Phase 6 — DEPLOY) — KUBERNETES probe profile ──────────────────────────────────
+# Activated ONLY when "k8s" is among the active profiles (the k8s ConfigMap sets
+# SPRING_PROFILES_ACTIVE=prod,k8s for the gateway). It switches on Spring Boot Actuator's
+# Kubernetes health PROBES so the platform can poll them: readiness (/actuator/health/readiness)
+# gates traffic into the pod, liveness (/actuator/health/liveness) gates restarts of a wedged pod.
+# The `group` mappings bind each probe to Boot's built-in ApplicationAvailability states
+# (readinessState / livenessState). Gated behind this profile so LOCAL / dev / test /
+# docker-compose behaviour is byte-for-byte unchanged — none of those set the k8s profile.
+---
+spring:
+  config:
+    activate:
+      on-profile: k8s
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState
+        liveness:
+          include: livenessState

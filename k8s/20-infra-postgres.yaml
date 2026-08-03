@@ -1,0 +1,92 @@
+# Day 43 (Phase 6 — DEPLOY) — PostgreSQL, the order-service database.
+# ===========================================================================
+# A DELIBERATELY LIGHTWEIGHT, runnable-in-spirit Deployment so `kubectl apply -f k8s/`
+# stands the whole stack up on any cluster (kind / minikube / Docker Desktop) with
+# nothing pre-provisioned. It uses an emptyDir volume, so data is EPHEMERAL — fine
+# for a demo, wrong for production.
+#
+# ⚠️  PRODUCTION: a database is STATEFUL. Real clusters run Postgres as a StatefulSet
+#     with a PersistentVolumeClaim (durable storage, stable identity), via an operator
+#     (CloudNativePG / Zalando), or — most often — as a managed service (RDS / Cloud SQL)
+#     that lives OUTSIDE the cluster and is reached through this same Service name.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: orderhub
+  labels:
+    app: postgres
+    app.kubernetes.io/part-of: orderhub
+    app.kubernetes.io/component: database
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: orderhub
+            # Seed the DB user/password from the SAME Secret the services read, so
+            # both sides agree without hardcoding — demonstrating secretKeyRef.
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: orderhub-secrets
+                  key: SPRING_DATASOURCE_USERNAME
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: orderhub-secrets
+                  key: SPRING_DATASOURCE_PASSWORD
+            # Where Postgres keeps its data inside the (ephemeral) volume mount.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "orderhub", "-d", "orderhub"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "orderhub", "-d", "orderhub"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: pgdata
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: orderhub
+  labels:
+    app: postgres
+    app.kubernetes.io/part-of: orderhub
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432
