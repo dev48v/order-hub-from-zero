@@ -1,0 +1,153 @@
+# Day 45 (Phase 6 — DEPLOY) — the CI/CD PIPELINE for the whole OrderHub reactor.
+# ============================================================================
+# Day 42 dockerized the eight services, Day 43 wrote raw k8s manifests, Day 44 packaged
+# them into a Helm chart. Everything so far had to be built + tested + imaged BY HAND on a
+# laptop. Day 45 automates exactly that on GitHub Actions: every push and every pull request
+# to master runs the full Maven reactor (compile + all 159 tests), and every push to master
+# additionally builds all eight service images from the Day-42 Dockerfiles.
+#
+# WHY GitHub Actions: the pipeline lives in the repo (this file IS the config — reviewed in
+# the same PR as the code it gates), runs on managed Ubuntu runners, and needs no external
+# CI server. A "workflow" is one or more JOBS; each job is a set of STEPS run on a fresh VM.
+#
+# The two jobs and how they relate:
+#   build-test   — checkout → JDK 21 (Temurin, Maven cache) → `mvn -B clean verify` → upload
+#                  the surefire reports. Runs on BOTH push and pull_request, so a red PR is
+#                  visible before merge.
+#   docker-build — needs build-test (only starts if the build is green) AND only on a push to
+#                  master. A matrix fans out over the eight modules and builds each service
+#                  image from its Day-42 Dockerfile in BUILD-ONLY mode (push: false) — proving
+#                  every image still builds without publishing anything. Where a real registry
+#                  login + push would go is marked inline.
+name: CI
+
+# ── triggers ────────────────────────────────────────────────────────────────
+# push + pull_request to master gate the default branch; workflow_dispatch adds a manual
+# "Run workflow" button in the Actions tab for ad-hoc runs.
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+# ── concurrency ─────────────────────────────────────────────────────────────
+# One in-flight run per ref. A second push to the same branch/PR cancels the older, still-
+# running pipeline instead of wasting runners on stale commits.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ── permissions (least privilege) ───────────────────────────────────────────
+# The default GITHUB_TOKEN is scoped DOWN to read-only on the repo contents. This pipeline
+# only reads code and builds images locally — it never writes to the repo, opens PRs, or
+# pushes packages — so nothing more is granted. A publish job would raise `packages: write`
+# on that job alone, not here.
+permissions:
+  contents: read
+
+jobs:
+  # ==========================================================================
+  # build-test — compile the reactor and run every test on JDK 21.
+  # ==========================================================================
+  build-test:
+    name: Build & test (JDK 21)
+    runs-on: ubuntu-latest
+    steps:
+      # Pull the repo at the triggering commit.
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Temurin JDK 21 (matches <java.version>21</java.version> in the reactor pom).
+      # cache: maven keys the ~/.m2 dependency cache on the pom hashes, so a run whose
+      # poms are unchanged restores the whole dependency tree instead of re-downloading it.
+      - name: Set up JDK 21 (Temurin) + Maven cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # The build gate. `verify` runs the full lifecycle through the test phase for every
+      # module in the reactor (all 159 tests) and fails the job on the first red test.
+      # -B (batch mode) makes Maven's output CI-friendly (no ANSI/progress spam).
+      - name: Build and test the reactor
+        run: mvn -B clean verify
+
+      # Keep the surefire XML/TXT reports as a downloadable artifact for post-mortems on a
+      # failed run. if: always() uploads them even when the build step failed (that's when
+      # they matter most). if-no-files-found: ignore avoids failing when a module has none.
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: '**/target/surefire-reports/**'
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ==========================================================================
+  # docker-build — build all eight service images from the Day-42 Dockerfiles.
+  # ==========================================================================
+  # needs: build-test — this job does not start until the reactor is green.
+  # if: … — only on a real push to master (not on PRs), so PR feedback stays fast and images
+  #         are only built for merged/branch code.
+  docker-build:
+    name: Build image · ${{ matrix.module }}
+    needs: build-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    strategy:
+      # fail-fast: false — one service failing to build should not cancel the other seven;
+      # we want to see every image's result in one run.
+      fail-fast: false
+      matrix:
+        # The eight runnable modules — each has its own multi-stage Dockerfile (Day 42),
+        # all built from the REPOSITORY ROOT context so the whole reactor is available.
+        module:
+          - config-server
+          - eureka-server
+          - api-gateway
+          - order-service
+          - inventory-service
+          - payment-service
+          - shipping-service
+          - notification-service
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Buildx enables the modern BuildKit builder (multi-stage caching, the gha cache
+      # backend used below).
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # ── WHERE A REGISTRY LOGIN WOULD GO ──────────────────────────────────
+      # To PUBLISH instead of just building, add a login step here and flip push: true below.
+      # Secrets are referenced by name only — never inline a real value:
+      #
+      #   - name: Log in to the container registry
+      #     uses: docker/login-action@v3
+      #     with:
+      #       registry: ghcr.io
+      #       username: ${{ github.actor }}
+      #       password: ${{ secrets.GITHUB_TOKEN }}       # or ${{ secrets.REGISTRY_TOKEN }}
+      #
+      # (a GHCR push would also need `permissions: packages: write` on this job.)
+
+      # Build THIS matrix module's image from its Day-42 Dockerfile.
+      #   context: .                      — repo root, so the whole reactor is in the build context
+      #   file: <module>/Dockerfile       — that service's multi-stage Dockerfile
+      #   push: false                     — BUILD-ONLY: prove the image builds, publish nothing
+      #   tags: orderhub/<module>:<sha>   — the Day-42 local image name + the commit SHA
+      #   cache-from/to: type=gha         — share the BuildKit layer cache across runs via the
+      #                                     GitHub Actions cache, so unchanged layers are reused
+      - name: Build ${{ matrix.module }} image (build-only, no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.module }}/Dockerfile
+          push: false                     # ← set to true (with a login step above) to publish
+          tags: orderhub/${{ matrix.module }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
