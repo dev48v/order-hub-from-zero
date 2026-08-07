@@ -115,6 +115,61 @@ on Day 43 so it, too, honours the same liveness/readiness contract.
 
 ---
 
+## Zero-downtime rollout (Day 43 → **Day 46**)
+
+Day 43 gated the rollout on **readiness**. **Day 46** closes the remaining gaps so a
+`kubectl apply` of a new image tag serves **every request without a drop** — on both sides of
+the roll (the *new* pod isn't sent traffic too early, the *old* pod isn't killed mid-request):
+
+| Field (on every app Deployment) | Value | What it buys |
+|---|---|---|
+| `strategy.type` | `RollingUpdate` | Replace pods incrementally, never all at once. |
+| `strategy.rollingUpdate.maxUnavailable` | **`0`** | Never drop below the desired replica count — a new pod must be **Ready before** an old one is retired. |
+| `strategy.rollingUpdate.maxSurge` | `1` | Add one extra pod first — so even a **single-replica** service rolls over with no gap. |
+| `minReadySeconds` | `10` | A new pod counts as *available* only after it stays Ready this long (rides out a flapping probe). |
+| `lifecycle.preStop` | `sleep 10` | On termination, sleep so the pod's **removal from the Service endpoints propagates** before the app gets SIGTERM — no new request lands on a stopping pod. |
+| `terminationGracePeriodSeconds` | `45` | Total SIGTERM→SIGKILL budget; covers the preStop sleep **plus** the app's graceful shutdown. |
+| `revisionHistoryLimit` | `5` | Keep old ReplicaSets so `kubectl rollout undo` has somewhere to roll back to. |
+
+On the app side, each service's **k8s-profile** config turns on Spring Boot **graceful shutdown**
+(`server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 30s`), so on SIGTERM
+the app stops accepting new requests but **finishes the in-flight ones** before the context
+closes. Because the k8s probes are on, Boot also flips **readiness → `OUT_OF_SERVICE`** for the
+whole shutdown window, so the platform stops routing immediately.
+
+**The termination order that makes it drop-free:** pod marked *Terminating* → removed from Service
+endpoints **and** `preStop` sleep start (in parallel) → sleep ends → **SIGTERM** → Spring drains
+in-flight requests (≤ 30s) → process exits (or SIGKILL at 45s). Since `10 (sleep) + 30 (drain) < 45`,
+nothing is ever cut off.
+
+### Watch a rollout / roll it back
+
+```bash
+# Trigger a roll (new image tag, or any pod-template change):
+kubectl -n orderhub set image deployment/order-service order-service=orderhub/order-service:0.2.0
+
+# Watch it converge — blocks until the new ReplicaSet is fully available (or fails):
+kubectl -n orderhub rollout status deployment/order-service
+
+# Inspect history (revisionHistoryLimit keeps the last 5):
+kubectl -n orderhub rollout history deployment/order-service
+
+# Roll straight back to the previous revision if the new one misbehaves:
+kubectl -n orderhub rollout undo deployment/order-service
+# ...or to a specific revision:
+kubectl -n orderhub rollout undo deployment/order-service --to-revision=3
+
+# Pause / resume a roll to canary it:
+kubectl -n orderhub rollout pause  deployment/order-service
+kubectl -n orderhub rollout resume deployment/order-service
+```
+
+> Infra Deployments (Postgres/Redis/Kafka) keep the default strategy on purpose — a single-replica
+> stateful pod on a ReadWriteOnce volume can't surge a second pod, so zero-downtime there is a
+> StatefulSet + PDB concern, out of scope for these ephemeral demo pods.
+
+---
+
 ## Config vs. Secret
 
 - **`orderhub-config` (ConfigMap)** — plaintext addresses + switches, injected into every app

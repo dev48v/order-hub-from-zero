@@ -22,6 +22,17 @@ metadata:
     {{- end }}
 spec:
   replicas: {{ $svc.replicas }}
+  # ── Day 46 ZERO-DOWNTIME rollout (identical for every app; the values live once under
+  #    .Values.rollout). RollingUpdate + maxUnavailable:0 keeps the desired count up for the
+  #    whole roll; maxSurge:1 adds a pod before retiring one; minReadySeconds rides out a
+  #    flapping probe; revisionHistoryLimit keeps ReplicaSets for `kubectl rollout undo`.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: {{ $.Values.rollout.maxSurge }}
+      maxUnavailable: {{ $.Values.rollout.maxUnavailable }}
+  minReadySeconds: {{ $.Values.rollout.minReadySeconds }}
+  revisionHistoryLimit: {{ $.Values.rollout.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 6 }}
@@ -30,12 +41,22 @@ spec:
       labels:
         {{- include "orderhub.selectorLabels" (dict "name" $name) | nindent 8 }}
     spec:
+      # Day 46 — DRAIN budget. TOTAL time from SIGTERM to SIGKILL; must exceed the preStop sleep
+      # + Spring's graceful-shutdown timeout so in-flight requests finish before a force-kill.
+      terminationGracePeriodSeconds: {{ $.Values.rollout.terminationGracePeriodSeconds }}
       containers:
         - name: {{ $name }}
           image: "{{ include "orderhub.image" (dict "svc" $svc "root" $) }}"
           imagePullPolicy: {{ $.Values.global.imagePullPolicy }}
           ports:
             - containerPort: {{ $svc.port }}
+          # Day 46 — preStop DRAIN hook. Sleep so the pod's removal from the Service endpoints
+          # propagates BEFORE the app gets SIGTERM (no new request hits a stopping pod); then
+          # SIGTERM fires and Spring's graceful shutdown drains the in-flight requests.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep {{ $.Values.rollout.preStopSleepSeconds }}"]
           # Shared, non-secret config + the secrets, injected the same way for every app.
           envFrom:
             - configMapRef:

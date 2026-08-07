@@ -16,6 +16,18 @@ metadata:
     app.kubernetes.io/component: application
 spec:
   replicas: 2
+  # Day 46 (Phase 6 — DEPLOY) — ZERO-DOWNTIME rollout. RollingUpdate with maxUnavailable:0
+  # never drops below the desired replica count during a roll (a new pod must go Ready before
+  # an old one is retired); maxSurge:1 adds one extra pod at a time. minReadySeconds holds a new
+  # pod "available" only after it has stayed Ready that long (rides out a flapping probe).
+  # revisionHistoryLimit keeps the last N ReplicaSets so `kubectl rollout undo` can roll back.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  minReadySeconds: 10
+  revisionHistoryLimit: 5
   selector:
     matchLabels:
       app: inventory-service
@@ -24,12 +36,25 @@ spec:
       labels:
         app: inventory-service
     spec:
+      # Day 46 — DRAIN before SIGKILL. terminationGracePeriodSeconds is the TOTAL budget from
+      # SIGTERM to SIGKILL; it must exceed the preStop sleep (10s) + Spring's graceful-shutdown
+      # timeout (spring.lifecycle.timeout-per-shutdown-phase = 30s) so in-flight requests finish.
+      terminationGracePeriodSeconds: 45
       containers:
         - name: inventory-service
           image: orderhub/inventory-service:0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
+          # Day 46 — preStop DRAIN hook. On termination Kubernetes (a) removes the pod from the
+          # Service endpoints and (b) runs this hook, in parallel. The sleep gives endpoint removal
+          # time to propagate across the cluster BEFORE the app receives SIGTERM, so no new request
+          # is routed to a pod that is about to stop. Only when the hook returns does SIGTERM fire
+          # and Spring's graceful shutdown drains the requests already in flight.
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
           envFrom:
             - configMapRef:
                 name: orderhub-config

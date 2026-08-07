@@ -41,6 +41,30 @@ probes:
     periodSeconds: 15
     failureThreshold: 6
 
+# ── rollout: Day 46 ZERO-DOWNTIME knobs, IDENTICAL for all eight apps ────────────
+# Day 46 makes every deploy drop-free. Because the settings are the same on every app (just
+# like `probes` above), they live ONCE here and the deployment template stamps them onto every
+# rendered Deployment. Override per environment with --set, e.g.
+#   helm upgrade orderhub ./helm/orderhub --set rollout.preStopSleepSeconds=15
+rollout:
+  # RollingUpdate with maxUnavailable:0 NEVER drops below the desired replica count during a
+  # roll — a new pod must go Ready before an old one is retired. maxSurge:1 adds one extra pod
+  # at a time, so even a single-replica service rolls over with no gap.
+  maxSurge: 1
+  maxUnavailable: 0
+  # A new pod counts as "available" only after it has stayed Ready this long — rides out a
+  # readiness probe that flaps right after startup.
+  minReadySeconds: 10
+  # Keep the last N ReplicaSets so `kubectl rollout undo` (and `helm rollback`) can roll back.
+  revisionHistoryLimit: 5
+  # TOTAL budget from SIGTERM to SIGKILL. Must exceed preStopSleepSeconds + Spring's
+  # graceful-shutdown timeout (spring.lifecycle.timeout-per-shutdown-phase = 30s) so in-flight
+  # requests finish before the container is force-killed.
+  terminationGracePeriodSeconds: 45
+  # preStop DRAIN: sleep so the pod's removal from the Service endpoints propagates across the
+  # cluster BEFORE the app gets SIGTERM — no new request is routed to a pod that is about to stop.
+  preStopSleepSeconds: 10
+
 # ── config: the shared, NON-secret ConfigMap (was k8s/10-configmap.yaml) ─────────
 config:
   name: orderhub-config

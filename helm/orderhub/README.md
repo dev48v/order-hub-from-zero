@@ -56,6 +56,14 @@ helm rollback orderhub 1 -n orderhub
 helm uninstall orderhub -n orderhub
 ```
 
+Every `helm upgrade` is **zero-downtime by default** (Day 46): the rendered Deployments carry a
+`RollingUpdate` strategy with `maxUnavailable: 0`, a `preStop` drain hook, a
+`terminationGracePeriodSeconds` window and Spring's graceful shutdown — so an image bump serves
+every request without a drop. Follow a single service's roll with
+`kubectl -n orderhub rollout status deployment/<svc>`, and roll a bad release back with
+`helm rollback` (Helm) or `kubectl -n orderhub rollout undo deployment/<svc>` (Kubernetes). See
+[`k8s/README.md`](../../k8s/README.md#zero-downtime-rollout-day-43--day-46) for the full walkthrough.
+
 ## Enable / disable the Ingress
 
 The Ingress is **on** by default (`ingress.enabled: true`), routing one host to the API-facing
@@ -116,6 +124,7 @@ overlay so the base chart stays pristine.
 |---|---|
 | `global.imageRegistry` / `global.imagePullPolicy` | Optional registry prefix + pull policy for every image. |
 | `probes.{startup,readiness,liveness}` | The Actuator health-group probe timings, shared by all 8 apps. |
+| `rollout.{maxSurge,maxUnavailable,minReadySeconds,revisionHistoryLimit,terminationGracePeriodSeconds,preStopSleepSeconds}` | **Day 46** zero-downtime knobs, shared by all 8 apps — RollingUpdate `maxUnavailable: 0`, preStop drain + grace period. |
 | `config.name` / `config.data` | The shared `orderhub-config` ConfigMap (`envFrom` into every app). |
 | `config.configImport` | `SPRING_CONFIG_IMPORT` value, stamped on services flagged `configImport: true`. |
 | `secrets.name` / `secrets.data` / `secrets.create` | The `orderhub-secrets` Secret — **placeholders only**; set `create: false` to bring your own. |
