@@ -151,3 +151,93 @@ jobs:
           tags: orderhub/${{ matrix.module }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # ==========================================================================
+  # load-test — Day 47 (Phase 6 — DEPLOY): run the k6 load test against a live order-service and
+  # FAIL THE BUILD if an SLO threshold is breached.
+  # ==========================================================================
+  # needs: build-test — only load-test a green reactor (no point stressing a broken build).
+  # The unit build proves correctness; this job proves order-service holds its latency + error-rate
+  # SLOs under a staged VU ramp. A breached threshold makes `k6 run` exit non-zero → this job (and
+  # the pipeline) goes red, exactly like a failing unit test.
+  #
+  # It boots order-service STANDALONE — no Kafka / Eureka / Redis / gateway needed:
+  #   SPRING_CACHE_TYPE=none        — @Cacheable becomes a no-op (no Redis required)
+  #   EUREKA_CLIENT_ENABLED=false   — don't try to register with a registry that isn't running
+  #   ORDERHUB_EVENTS_ENABLED=false — don't publish OrderPlaced (no broker to reach)
+  #   ORDERHUB_SAGA_ENABLED=false   — don't start the saga @KafkaListeners
+  #   APP_RATELIMIT_ENABLED=false   — the 20-req/min token bucket would 429 the load and mask the SLO
+  # so the service is a pure in-memory H2 order API on :8082 — the exact surface the k6 script drives.
+  load-test:
+    name: k6 load test (SLO gates)
+    needs: build-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21 (Temurin) + Maven cache
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      # Build just order-service (+ the modules it needs) — skip tests, they ran in build-test.
+      - name: Package order-service
+        run: mvn -B -pl order-service -am -DskipTests package
+
+      # Boot the jar in the background, standalone (see the env rationale above), and wait until
+      # Actuator health reports UP before loading it — so the ramp doesn't start against a cold context.
+      - name: Start order-service and wait for health
+        env:
+          SPRING_CACHE_TYPE: none
+          EUREKA_CLIENT_ENABLED: 'false'
+          ORDERHUB_EVENTS_ENABLED: 'false'
+          ORDERHUB_SAGA_ENABLED: 'false'
+          APP_RATELIMIT_ENABLED: 'false'
+        run: |
+          java -jar order-service/target/order-service-*.jar > order-service.log 2>&1 &
+          echo "$!" > order-service.pid
+          echo "waiting for order-service on :8082 to report UP…"
+          for i in $(seq 1 60); do
+            if curl -fs http://localhost:8082/actuator/health | grep -q '"status":"UP"'; then
+              echo "order-service is UP"; exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::order-service did not become healthy in time"; tail -n 200 order-service.log; exit 1
+
+      # Install the k6 binary on the runner.
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+
+      # Smoke first (cheap go/no-go), then the full staged load test. Both target the local
+      # order-service directly on :8082. A breached threshold in either exits non-zero → job fails.
+      - name: k6 smoke test
+        run: k6 run k6/smoke.js
+        env:
+          BASE_URL: http://localhost:8082
+
+      - name: k6 load test (staged VUs + SLO thresholds)
+        run: k6 run k6/order-load.js
+        env:
+          BASE_URL: http://localhost:8082
+
+      # Keep the machine-readable summary (and the service log) for post-mortems — even on failure,
+      # which is when they matter most.
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary
+          path: |
+            k6/summary.json
+            order-service.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Stop the background service (best-effort; the runner is torn down anyway).
+      - name: Stop order-service
+        if: always()
+        run: '[ -f order-service.pid ] && kill "$(cat order-service.pid)" || true'
